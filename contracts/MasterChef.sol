@@ -206,7 +206,7 @@ contract MasterChef is Ownable {
         uint amountBMin) public {
         uint _amount;
         (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, msg.sender);
-        deposit(_pid, _amount);
+        _deposit(_pid, _amount);
     }
 
     function depositETH(uint256 _pid,
@@ -215,8 +215,24 @@ contract MasterChef is Ownable {
         uint amountTokenMin,
         uint amountETHMin) public {
         uint _amount;
-        (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin,msg.sender);
-        deposit(_pid, _amount);
+        (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
+        _deposit(_pid, _amount);
+    }
+
+    function _deposit(uint256 _pid, uint256 _amount) internal {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        updatePool(_pid);
+        if (user.amount > 0) {
+            uint256 pending =
+            user.amount.mul(pool.accHptPerShare).div(1e12).sub(
+                user.rewardDebt
+            );
+            safeHptTransfer(msg.sender, pending);
+        }
+        user.amount = user.amount.add(_amount);
+        user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
+        emit Deposit(msg.sender, _pid, _amount);
     }
 
     // Deposit LP tokens to MasterChef for HPT allocation.
@@ -239,6 +255,41 @@ contract MasterChef is Ownable {
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
         emit Deposit(msg.sender, _pid, _amount);
+    }
+
+    function withdrawTokens(uint256 _pid,
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin) public {
+        _withdraw(_pid, liquidity);
+        removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
+    }
+
+    function withdrawETH(uint256 _pid,
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin) public {
+        _withdraw(_pid, liquidity);
+        removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, msg.sender);
+    }
+
+    // Withdraw LP tokens from MasterChef.
+    function _withdraw(uint256 _pid, uint256 _amount) internal {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        require(user.amount >= _amount, "withdraw: not good");
+        updatePool(_pid);
+        uint256 pending =
+        user.amount.mul(pool.accHptPerShare).div(1e12).sub(
+            user.rewardDebt
+        );
+        safeHptTransfer(msg.sender, pending);
+        user.amount = user.amount.sub(_amount);
+        user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
+        emit Withdraw(msg.sender, _pid, _amount);
     }
 
     // Withdraw LP tokens from MasterChef.
