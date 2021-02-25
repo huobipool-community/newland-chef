@@ -7,6 +7,10 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./interface/IMdexFactory.sol";
+import "./interface/IMdexPair.sol";
+import "./interface/IWHT.sol";
+import "./library/TransferHelper.sol";
 
 // MasterChef is the master of Hpt. He can make Hpt and he is a fair guy.
 //
@@ -47,6 +51,9 @@ contract MasterChef is Ownable {
     // The block number when HPT mining starts.
     uint256 public startBlock;
     uint256 hptRewardToBe;
+    address public factory;
+    address public WHT;
+
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
     event EmergencyWithdraw(
@@ -59,21 +66,24 @@ contract MasterChef is Ownable {
         IERC20 _hpt,
         uint256 _hptPerBlock,
         uint256 _startBlock,
-        uint256 _bonusEndBlock
+        uint256 _bonusEndBlock,
+        address _mdxFactory,
+        address _WHT
     ) public {
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
         bonusEndBlock = _bonusEndBlock;
         startBlock = _startBlock;
+        factory = _mdxFactory;
+        WHT = _WHT;
     }
 
     function poolLength() external view returns (uint256) {
         return poolInfo.length;
     }
 
-    function () public payable {
-
-    }
+    fallback() external {}
+    receive() payable external {}
 
     function revoke() public onlyOwner {
         safeHptTransfer(msg.sender, hpt.balanceOf(address(this)));
@@ -190,6 +200,115 @@ contract MasterChef is Ownable {
         pool.lastRewardBlock = block.number;
     }
 
+    // **** ADD LIQUIDITY ****
+    function _addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin
+    ) internal returns (uint amountA, uint amountB) {
+        // create the pair if it doesn't exist yet
+        if (IMdexFactory(factory).getPair(tokenA, tokenB) == address(0)) {
+            IMdexFactory(factory).createPair(tokenA, tokenB);
+        }
+        (uint reserveA, uint reserveB) = IMdexFactory(factory).getReserves(tokenA, tokenB);
+        if (reserveA == 0 && reserveB == 0) {
+            (amountA, amountB) = (amountADesired, amountBDesired);
+        } else {
+            uint amountBOptimal = IMdexFactory(factory).quote(amountADesired, reserveA, reserveB);
+            if (amountBOptimal <= amountBDesired) {
+                require(amountBOptimal >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
+                (amountA, amountB) = (amountADesired, amountBOptimal);
+            } else {
+                uint amountAOptimal = IMdexFactory(factory).quote(amountBDesired, reserveB, reserveA);
+                assert(amountAOptimal <= amountADesired);
+                require(amountAOptimal >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
+                (amountA, amountB) = (amountAOptimal, amountBDesired);
+            }
+        }
+    }
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
+        address to
+    ) internal returns (uint amountA, uint amountB, uint liquidity) {
+        (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
+        address pair = pairFor(tokenA, tokenB);
+        TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
+        TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
+        liquidity = IMdexPair(pair).mint(to);
+    }
+
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to
+    ) internal returns (uint amountToken, uint amountETH, uint liquidity) {
+        (amountToken, amountETH) = _addLiquidity(
+            token,
+            WHT,
+            amountTokenDesired,
+            msg.value,
+            amountTokenMin,
+            amountETHMin
+        );
+        address pair = pairFor(token, WHT);
+        TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
+        IWHT(WHT).deposit{value : amountETH}();
+        assert(IWHT(WHT).transfer(pair, amountETH));
+        liquidity = IMdexPair(pair).mint(to);
+        // refund dust eth, if any
+        if (msg.value > amountETH) TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
+    }
+
+    // **** REMOVE LIQUIDITY ****
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to
+    ) internal returns (uint amountA, uint amountB) {
+        address pair = pairFor(tokenA, tokenB);
+        IMdexPair(pair).transferFrom(msg.sender, pair, liquidity);
+        // send liquidity to pair
+        (uint amount0, uint amount1) = IMdexPair(pair).burn(to);
+        (address token0,) = IMdexFactory(factory).sortTokens(tokenA, tokenB);
+        (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
+        require(amountA >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
+        require(amountB >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
+    }
+
+    function removeLiquidityETH(
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to
+    ) internal returns (uint amountToken, uint amountETH) {
+        (amountToken, amountETH) = removeLiquidity(
+            token,
+            WHT,
+            liquidity,
+            amountTokenMin,
+            amountETHMin,
+            address(this)
+        );
+        TransferHelper.safeTransfer(token, to, amountToken);
+        IWHT(WHT).withdraw(amountETH);
+        TransferHelper.safeTransferETH(to, amountETH);
+    }
+
     // Deposit LP tokens to MasterChef for HPT allocation.
     function deposit(uint256 _pid, uint256 _amount) public {
         PoolInfo storage pool = poolInfo[_pid];
@@ -242,5 +361,9 @@ contract MasterChef is Ownable {
     function safeHptTransfer(address _to, uint256 _amount) internal {
         hptRewardToBe -= _amount;
         hpt.transfer(_to, _amount);
+    }
+
+    function pairFor(address tokenA, address tokenB) public view returns (address pair){
+        pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
     }
 }
