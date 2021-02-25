@@ -205,6 +205,8 @@ contract MasterChef is Ownable {
         uint amountAMin,
         uint amountBMin) public {
         uint _amount;
+        address pair = pairFor(tokenA, tokenB);
+        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
         (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, msg.sender);
         _deposit(_pid, _amount);
     }
@@ -215,6 +217,8 @@ contract MasterChef is Ownable {
         uint amountTokenMin,
         uint amountETHMin) public {
         uint _amount;
+        address pair = pairFor(token, WHT);
+        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
         (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
         _deposit(_pid, _amount);
     }
@@ -263,6 +267,8 @@ contract MasterChef is Ownable {
         uint liquidity,
         uint amountAMin,
         uint amountBMin) public {
+        address pair = pairFor(tokenA, tokenB);
+        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
         _withdraw(_pid, liquidity);
         removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
     }
@@ -272,6 +278,8 @@ contract MasterChef is Ownable {
         uint liquidity,
         uint amountTokenMin,
         uint amountETHMin) public {
+        address pair = pairFor(token, WHT);
+        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
         _withdraw(_pid, liquidity);
         removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, msg.sender);
     }
