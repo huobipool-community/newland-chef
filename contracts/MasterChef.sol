@@ -82,9 +82,6 @@ contract MasterChef is Ownable {
         return poolInfo.length;
     }
 
-    fallback() external {}
-    receive() payable external {}
-
     function revoke() public onlyOwner {
         safeHptTransfer(msg.sender, hpt.balanceOf(address(this)));
     }
@@ -200,6 +197,86 @@ contract MasterChef is Ownable {
         pool.lastRewardBlock = block.number;
     }
 
+    function depositTokens(uint256 _pid,
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin) public {
+        uint _amount;
+        (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, msg.sender);
+        deposit(_pid, _amount);
+    }
+
+    function depositETH(uint256 _pid,
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin) public {
+        uint _amount;
+        (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin,msg.sender);
+        deposit(_pid, _amount);
+    }
+
+    // Deposit LP tokens to MasterChef for HPT allocation.
+    function deposit(uint256 _pid, uint256 _amount) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        updatePool(_pid);
+        if (user.amount > 0) {
+            uint256 pending =
+            user.amount.mul(pool.accHptPerShare).div(1e12).sub(
+                user.rewardDebt
+            );
+            safeHptTransfer(msg.sender, pending);
+        }
+        pool.lpToken.safeTransferFrom(
+            address(msg.sender),
+            address(this),
+            _amount
+        );
+        user.amount = user.amount.add(_amount);
+        user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
+        emit Deposit(msg.sender, _pid, _amount);
+    }
+
+    // Withdraw LP tokens from MasterChef.
+    function withdraw(uint256 _pid, uint256 _amount) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        require(user.amount >= _amount, "withdraw: not good");
+        updatePool(_pid);
+        uint256 pending =
+        user.amount.mul(pool.accHptPerShare).div(1e12).sub(
+            user.rewardDebt
+        );
+        safeHptTransfer(msg.sender, pending);
+        user.amount = user.amount.sub(_amount);
+        user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
+        pool.lpToken.safeTransfer(address(msg.sender), _amount);
+        emit Withdraw(msg.sender, _pid, _amount);
+    }
+
+    // Withdraw without caring about rewards. EMERGENCY ONLY.
+    function emergencyWithdraw(uint256 _pid) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        pool.lpToken.safeTransfer(address(msg.sender), user.amount);
+        emit EmergencyWithdraw(msg.sender, _pid, user.amount);
+        user.amount = 0;
+        user.rewardDebt = 0;
+    }
+
+    function safeHptTransfer(address _to, uint256 _amount) internal {
+        hptRewardToBe -= _amount;
+        hpt.transfer(_to, _amount);
+    }
+
+    function pairFor(address tokenA, address tokenB) public view returns (address pair){
+        pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
+    }
+
     // **** ADD LIQUIDITY ****
     function _addLiquidity(
         address tokenA,
@@ -309,61 +386,6 @@ contract MasterChef is Ownable {
         TransferHelper.safeTransferETH(to, amountETH);
     }
 
-    // Deposit LP tokens to MasterChef for HPT allocation.
-    function deposit(uint256 _pid, uint256 _amount) public {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        updatePool(_pid);
-        if (user.amount > 0) {
-            uint256 pending =
-            user.amount.mul(pool.accHptPerShare).div(1e12).sub(
-                user.rewardDebt
-            );
-            safeHptTransfer(msg.sender, pending);
-        }
-        pool.lpToken.safeTransferFrom(
-            address(msg.sender),
-            address(this),
-            _amount
-        );
-        user.amount = user.amount.add(_amount);
-        user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        emit Deposit(msg.sender, _pid, _amount);
-    }
-
-    // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _amount) public {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        require(user.amount >= _amount, "withdraw: not good");
-        updatePool(_pid);
-        uint256 pending =
-        user.amount.mul(pool.accHptPerShare).div(1e12).sub(
-            user.rewardDebt
-        );
-        safeHptTransfer(msg.sender, pending);
-        user.amount = user.amount.sub(_amount);
-        user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        pool.lpToken.safeTransfer(address(msg.sender), _amount);
-        emit Withdraw(msg.sender, _pid, _amount);
-    }
-
-    // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
-        pool.lpToken.safeTransfer(address(msg.sender), user.amount);
-        emit EmergencyWithdraw(msg.sender, _pid, user.amount);
-        user.amount = 0;
-        user.rewardDebt = 0;
-    }
-
-    function safeHptTransfer(address _to, uint256 _amount) internal {
-        hptRewardToBe -= _amount;
-        hpt.transfer(_to, _amount);
-    }
-
-    function pairFor(address tokenA, address tokenB) public view returns (address pair){
-        pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
-    }
+    fallback() external {}
+    receive() payable external {}
 }
