@@ -71,6 +71,14 @@ contract MasterChef is Ownable {
         return poolInfo.length;
     }
 
+    function () public payable {
+
+    }
+
+    function revoke() public onlyOwner {
+        safeHptTransfer(msg.sender, hpt.balanceOf(address(this)));
+    }
+
     // Add a new lp to the pool. Can only be called by the owner.
     // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
     function add(
@@ -231,7 +239,6 @@ contract MasterChef is Ownable {
         user.rewardDebt = 0;
     }
 
-    // Safe hpt transfer function, just in case if rounding error causes pool to not have enough HPTs.
     function safeHptTransfer(address _to, uint256 _amount) internal {
         hptRewardToBe -= _amount;
         hpt.transfer(_to, _amount);
