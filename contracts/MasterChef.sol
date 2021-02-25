@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interface/IMdexFactory.sol";
 import "./interface/IMdexPair.sol";
 import "./interface/IWHT.sol";
+import "./interface/IMdexChef.sol";
 import "./library/TransferHelper.sol";
 
 // MasterChef is the master of Hpt. He can make Hpt and he is a fair guy.
@@ -33,6 +34,8 @@ contract MasterChef is Ownable {
         uint256 allocPoint; // How many allocation points assigned to this pool. HPTs to distribute per block.
         uint256 lastRewardBlock; // Last block number that HPTs distribution occurs.
         uint256 accHptPerShare; // Accumulated HPTs per share, times 1e12. See below.
+        uint256 mdxChefPid;
+        uint256 balance;
     }
     // The HPT TOKEN!
     IERC20 public hpt;
@@ -53,6 +56,7 @@ contract MasterChef is Ownable {
     uint256 public hptDesiredBalance;
     address public factory;
     address public WHT;
+    address public mdxChef;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -68,7 +72,8 @@ contract MasterChef is Ownable {
         uint256 _startBlock,
         uint256 _bonusEndBlock,
         address _mdxFactory,
-        address _WHT
+        address _WHT,
+        address _mdxChef
     ) public {
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
@@ -76,6 +81,7 @@ contract MasterChef is Ownable {
         startBlock = _startBlock;
         factory = _mdxFactory;
         WHT = _WHT;
+        mdxChef = _mdxChef;
     }
 
     function poolLength() external view returns (uint256) {
@@ -91,6 +97,7 @@ contract MasterChef is Ownable {
     function add(
         uint256 _allocPoint,
         IERC20 _lpToken,
+        uint _mdxChefPid,
         bool _withUpdate
     ) public onlyOwner {
         if (_withUpdate) {
@@ -104,7 +111,9 @@ contract MasterChef is Ownable {
             lpToken: _lpToken,
             allocPoint: _allocPoint,
             lastRewardBlock: lastRewardBlock,
-            accHptPerShare: 0
+            accHptPerShare: 0,
+            mdxChefPid: _mdxChefPid,
+            balance: 0
             })
         );
     }
@@ -113,6 +122,7 @@ contract MasterChef is Ownable {
     function set(
         uint256 _pid,
         uint256 _allocPoint,
+        uint _mdxChefPid,
         bool _withUpdate
     ) public onlyOwner {
         if (_withUpdate) {
@@ -122,6 +132,7 @@ contract MasterChef is Ownable {
             _allocPoint
         );
         poolInfo[_pid].allocPoint = _allocPoint;
+        poolInfo[_pid].allocPoint = _mdxChefPid;
     }
 
     // Return reward multiplier over the given _from to _to block.
@@ -151,7 +162,7 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accHptPerShare = pool.accHptPerShare;
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.balance;
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 multiplier =
             getMultiplier(pool.lastRewardBlock, block.number);
@@ -180,7 +191,7 @@ contract MasterChef is Ownable {
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
-        uint256 lpSupply = pool.lpToken.balanceOf(address(this));
+        uint256 lpSupply = pool.balance;
         if (lpSupply == 0) {
             pool.lastRewardBlock = block.number;
             return;
@@ -190,7 +201,7 @@ contract MasterChef is Ownable {
         multiplier.mul(hptPerBlock).mul(pool.allocPoint).div(
             totalAllocPoint
         );
-        hptDesiredBalance += hptReward;
+        hptDesiredBalance = hptDesiredBalance.add(hptReward);
         pool.accHptPerShare = pool.accHptPerShare.add(
             hptReward.mul(1e12).div(lpSupply)
         );
@@ -206,8 +217,10 @@ contract MasterChef is Ownable {
         uint amountBMin) public {
         uint _amount;
         address pair = pairFor(tokenA, tokenB);
-        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
-        (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, msg.sender);
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
+        (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
+        IMdexChef(mdxChef).deposit(pool.mdxChefPid, _amount);
         deposit(_pid, _amount);
     }
 
@@ -218,8 +231,10 @@ contract MasterChef is Ownable {
         uint amountETHMin) public {
         uint _amount;
         address pair = pairFor(token, WHT);
-        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
-        (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, msg.sender);
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
+        (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
+        IMdexChef(mdxChef).deposit(pool.mdxChefPid, _amount);
         deposit(_pid, _amount);
     }
 
@@ -235,11 +250,7 @@ contract MasterChef is Ownable {
             );
             safeHptTransfer(msg.sender, pending);
         }
-        pool.lpToken.safeTransferFrom(
-            address(msg.sender),
-            address(this),
-            _amount
-        );
+        pool.balance = pool.balance.add(_amount);
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
         emit Deposit(msg.sender, _pid, _amount);
@@ -252,8 +263,10 @@ contract MasterChef is Ownable {
         uint amountAMin,
         uint amountBMin) public {
         address pair = pairFor(tokenA, tokenB);
-        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
         withdraw(_pid, liquidity);
+        IMdexChef(mdxChef).withdraw(pool.mdxChefPid, liquidity);
         removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
     }
 
@@ -263,8 +276,10 @@ contract MasterChef is Ownable {
         uint amountTokenMin,
         uint amountETHMin) public {
         address pair = pairFor(token, WHT);
-        require(pair == address(poolInfo[_pid].lpToken), "wrong pid");
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
         withdraw(_pid, liquidity);
+        IMdexChef(mdxChef).withdraw(pool.mdxChefPid, liquidity);
         removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, msg.sender);
     }
 
@@ -279,6 +294,7 @@ contract MasterChef is Ownable {
             user.rewardDebt
         );
         safeHptTransfer(msg.sender, pending);
+        pool.balance = pool.balance.sub(_amount);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
         emit Withdraw(msg.sender, _pid, _amount);
@@ -295,12 +311,16 @@ contract MasterChef is Ownable {
     }
 
     function safeHptTransfer(address _to, uint256 _amount) internal {
-        hptDesiredBalance -= _amount;
+        hptDesiredBalance = hptDesiredBalance.sub(_amount);
         hpt.transfer(_to, _amount);
     }
 
     function pairFor(address tokenA, address tokenB) internal view returns (address pair){
         pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
+    }
+
+    function rewardMdx() public {
+
     }
 
     // **** ADD LIQUIDITY ****
