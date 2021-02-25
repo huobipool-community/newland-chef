@@ -50,7 +50,7 @@ contract MasterChef is Ownable {
     uint256 public totalAllocPoint = 0;
     // The block number when HPT mining starts.
     uint256 public startBlock;
-    uint256 hptRewardToBe;
+    uint256 public hptDesiredBalance;
     address public factory;
     address public WHT;
 
@@ -190,7 +190,7 @@ contract MasterChef is Ownable {
         multiplier.mul(hptPerBlock).mul(pool.allocPoint).div(
             totalAllocPoint
         );
-        hptRewardToBe += hptReward;
+        hptDesiredBalance += hptReward;
         pool.accHptPerShare = pool.accHptPerShare.add(
             hptReward.mul(1e12).div(lpSupply)
         );
@@ -328,11 +328,11 @@ contract MasterChef is Ownable {
     }
 
     function safeHptTransfer(address _to, uint256 _amount) internal {
-        hptRewardToBe -= _amount;
+        hptDesiredBalance -= _amount;
         hpt.transfer(_to, _amount);
     }
 
-    function pairFor(address tokenA, address tokenB) public view returns (address pair){
+    function pairFor(address tokenA, address tokenB) internal view returns (address pair){
         pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
     }
 
