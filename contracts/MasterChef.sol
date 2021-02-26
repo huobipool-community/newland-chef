@@ -288,14 +288,8 @@ contract MasterChef is Ownable {
 
             // reward mdx
             mdxChef.withdraw(pool.mdxChefPid, 0);
-            uint256 mdxBalance = mdx.balanceOf(address(this));
-            if (mdxBalance > mdxTempBalance) {
-                uint256 delt = mdxBalance.sub(mdxTempBalance);
-                uint256 mdxProfit = delt.mul(profitRate).div(one);
-                uint256 mdxReward = delt.mul(one.sub(profitRate)).div(one);
-                pool.mdxRewardBalance = mdxTempBalance.add(mdxReward);
-                mdx.transfer(owner(),mdxProfit);
-            }
+            rewardMdx(pool);
+
             uint256 mdxPending =
             user.amount.mul(pool.mdxRewardBalance).div(pool.balance).sub(
                 user.mdxRewardDebt
@@ -358,14 +352,8 @@ contract MasterChef is Ownable {
 
         // reward mdx
         mdxChef.withdraw(pool.mdxChefPid, 0);
-        uint256 mdxBalance = mdx.balanceOf(address(this));
-        if (mdxBalance > mdxTempBalance) {
-            uint256 delt = mdxBalance.sub(mdxTempBalance);
-            uint256 mdxProfit = delt.mul(profitRate).div(one);
-            uint256 mdxReward = delt.mul(one.sub(profitRate)).div(one);
-            pool.mdxRewardBalance = mdxTempBalance.add(mdxReward);
-            mdx.transfer(owner(),mdxProfit);
-        }
+        rewardMdx(pool);
+
         uint256 mdxPending =
         user.amount.mul(pool.mdxRewardBalance).div(pool.balance).sub(
             user.mdxRewardDebt
@@ -380,13 +368,54 @@ contract MasterChef is Ownable {
     }
 
     // Withdraw without caring about rewards. EMERGENCY ONLY.
-    function emergencyWithdraw(uint256 _pid) public {
+    function emergencyWithdrawTokens(uint256 _pid,
+        address tokenA,
+        address tokenB,
+        uint amountAMin,
+        uint amountBMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        pool.lpToken.safeTransfer(address(msg.sender), user.amount);
+
+        mdxTempBalance = mdx.balanceOf(address(this));
+        mdxChef.withdraw(pool.mdxChefPid, user.amount);
+        rewardMdx(pool);
+
+        removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, msg.sender);
+
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
+        user.mdxRewardDebt = 0;
+    }
+
+    function emergencyWithdrawETH(uint256 _pid,
+        address token,
+        uint amountTokenMin,
+        uint amountETHMin) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+
+        mdxTempBalance = mdx.balanceOf(address(this));
+        mdxChef.withdraw(pool.mdxChefPid, user.amount);
+        rewardMdx(pool);
+
+        removeLiquidityETH(token, user.amount, amountTokenMin, amountETHMin, msg.sender);
+
+        emit EmergencyWithdraw(msg.sender, _pid, user.amount);
+        user.amount = 0;
+        user.rewardDebt = 0;
+        user.mdxRewardDebt = 0;
+    }
+
+    function rewardMdx(PoolInfo memory pool) internal {
+        uint256 mdxBalance = mdx.balanceOf(address(this));
+        if (mdxBalance > mdxTempBalance) {
+            uint256 delt = mdxBalance.sub(mdxTempBalance);
+            uint256 mdxProfit = delt.mul(profitRate).div(one);
+            uint256 mdxReward = delt.mul(one.sub(profitRate)).div(one);
+            pool.mdxRewardBalance = mdxTempBalance.add(mdxReward);
+            mdx.transfer(owner(),mdxProfit);
+        }
     }
 
     function safeHptTransfer(address _to, uint256 _amount) internal {
