@@ -37,7 +37,7 @@ contract MasterChef is Ownable {
         uint256 accHptPerShare; // Accumulated HPTs per share, times 1e12. See below.
         uint256 mdxChefPid;
         uint256 lpBalance;
-        uint256 accRewardBalance;
+        uint256 accMdxPerShare;
     }
     // The HPT TOKEN!
     IERC20 public hpt;
@@ -56,14 +56,13 @@ contract MasterChef is Ownable {
     // The block number when HPT mining starts.
     uint256 public startBlock;
     uint256 public hptRewardBalance;
+    uint256 public mdxRewardBalance;
     address public factory;
     address public WHT;
     IMdexChef public mdxChef;
     uint256 public profitRate;
     IERC20 public mdx;
     uint256 one = 1e18;
-    // temp var
-    uint256 mdxTempBalance;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -126,7 +125,7 @@ contract MasterChef is Ownable {
             accHptPerShare: 0,
             mdxChefPid: _mdxChefPid,
             lpBalance: 0,
-            accRewardBalance: 0
+            accMdxPerShare: 0
             })
         );
     }
@@ -198,12 +197,16 @@ contract MasterChef is Ownable {
     {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 mdxPendingBalance;
-        (mdxPendingBalance,) = mdxChef.pending(pool.mdxChefPid, address(this));
-        uint totalBalance = pool.accRewardBalance.add(mdxPendingBalance);
-        return user.amount.mul(totalBalance).div(pool.lpBalance).sub(
-            user.mdxRewardDebt
-        );
+        uint256 accMdxPerShare = pool.accMdxPerShare;
+        uint256 lpSupply = pool.lpBalance;
+        if (block.number > pool.lastRewardBlock && lpSupply != 0) {
+            uint256 mdxReward;
+            (mdxReward,) = mdxChef.pending(pool.mdxChefPid, address(this));
+            accMdxPerShare = accMdxPerShare.add(
+                mdxReward.mul(1e12).div(lpSupply)
+            );
+        }
+        return user.amount.mul(accMdxPerShare).div(1e12).sub(user.rewardDebt);
     }
 
     // Update reward vairables for all pools. Be careful of gas spending!
@@ -234,6 +237,22 @@ contract MasterChef is Ownable {
         pool.accHptPerShare = pool.accHptPerShare.add(
             hptReward.mul(1e12).div(lpSupply)
         );
+
+        uint256 mdxTempBalance;
+        mdxChef.withdraw(pool.mdxChefPid, 0);
+        uint256 mdxBalance = mdx.balanceOf(address(this));
+        if (mdxBalance > mdxTempBalance) {
+            uint256 delt = mdxBalance.sub(mdxTempBalance);
+            uint256 mdxProfit = delt.mul(profitRate).div(one);
+            mdx.transfer(owner(),mdxProfit);
+
+            uint256 mdxReward = delt.sub(mdxProfit);
+            hptRewardBalance = hptRewardBalance.add(mdxReward);
+            pool.accMdxPerShare = pool.accHptPerShare.add(
+                mdxReward.mul(1e12).div(lpSupply)
+            );
+        }
+
         pool.lastRewardBlock = block.number;
     }
 
@@ -248,7 +267,7 @@ contract MasterChef is Ownable {
         address pair = pairFor(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        mdxTempBalance = mdx.balanceOf(address(this));
+        updatePool(_pid);
         if (amountADesired == 0) {
             (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
             mdxChef.deposit(pool.mdxChefPid, _amount);
@@ -265,7 +284,7 @@ contract MasterChef is Ownable {
         address pair = pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        mdxTempBalance = mdx.balanceOf(address(this));
+        updatePool(_pid);
         if (amountTokenDesired != 0) {
             (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
             mdxChef.deposit(pool.mdxChefPid, _amount);
@@ -277,7 +296,6 @@ contract MasterChef is Ownable {
     function deposit(uint256 _pid, uint256 _amount) internal {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        updatePool(_pid);
         if (user.amount > 0) {
             // reward hpt
             uint256 pending =
@@ -287,19 +305,16 @@ contract MasterChef is Ownable {
             safeHptTransfer(msg.sender, pending);
 
             // reward mdx
-            mdxChef.withdraw(pool.mdxChefPid, 0);
-            rewardMdx(pool);
-
             uint256 mdxPending =
-            user.amount.mul(pool.accRewardBalance).div(pool.lpBalance).sub(
+            user.amount.mul(pool.accMdxPerShare).div(1e12).sub(
                 user.mdxRewardDebt
             );
-            mdx.safeTransfer(msg.sender, mdxPending);
+            safeMdxTransfer(msg.sender, mdxPending);
         }
         pool.lpBalance = pool.lpBalance.add(_amount);
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        user.mdxRewardDebt = user.amount.mul(pool.accRewardBalance).div(pool.lpBalance);
+        user.mdxRewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
         emit Deposit(msg.sender, _pid, _amount);
     }
 
@@ -312,7 +327,7 @@ contract MasterChef is Ownable {
         address pair = pairFor(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        mdxTempBalance = mdx.balanceOf(address(this));
+        updatePool(_pid);
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
@@ -328,7 +343,7 @@ contract MasterChef is Ownable {
         address pair = pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        mdxTempBalance = mdx.balanceOf(address(this));
+        updatePool(_pid);
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
@@ -341,7 +356,6 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         require(user.amount >= _amount, "withdraw: not good");
-        updatePool(_pid);
 
         // reward hpt
         uint256 pending =
@@ -351,19 +365,16 @@ contract MasterChef is Ownable {
         safeHptTransfer(msg.sender, pending);
 
         // reward mdx
-        mdxChef.withdraw(pool.mdxChefPid, 0);
-        rewardMdx(pool);
-
         uint256 mdxPending =
-        user.amount.mul(pool.accRewardBalance).div(pool.lpBalance).sub(
+        user.amount.mul(pool.accMdxPerShare).div(1e12).sub(
             user.mdxRewardDebt
         );
-        mdx.safeTransfer(msg.sender, mdxPending);
+        safeMdxTransfer(msg.sender, mdxPending);
 
         pool.lpBalance = pool.lpBalance.sub(_amount);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        user.mdxRewardDebt = user.amount.mul(pool.accRewardBalance).div(pool.lpBalance);
+        user.mdxRewardDebt = user.amount.mul(pool.accMdxPerShare).div(1e12);
         emit Withdraw(msg.sender, _pid, _amount);
     }
 
@@ -375,11 +386,9 @@ contract MasterChef is Ownable {
         uint amountBMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
+        updatePool(_pid);
 
-        mdxTempBalance = mdx.balanceOf(address(this));
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
-        rewardMdx(pool);
-
         removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, msg.sender);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
@@ -394,11 +403,9 @@ contract MasterChef is Ownable {
         uint amountETHMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
+        updatePool(_pid);
 
-        mdxTempBalance = mdx.balanceOf(address(this));
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
-        rewardMdx(pool);
-
         removeLiquidityETH(token, user.amount, amountTokenMin, amountETHMin, msg.sender);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
@@ -407,20 +414,14 @@ contract MasterChef is Ownable {
         user.mdxRewardDebt = 0;
     }
 
-    function rewardMdx(PoolInfo memory pool) internal {
-        uint256 mdxBalance = mdx.balanceOf(address(this));
-        if (mdxBalance > mdxTempBalance) {
-            uint256 delt = mdxBalance.sub(mdxTempBalance);
-            uint256 mdxProfit = delt.mul(profitRate).div(one);
-            uint256 mdxReward = delt.mul(one.sub(profitRate)).div(one);
-            pool.accRewardBalance = mdxTempBalance.add(mdxReward);
-            mdx.transfer(owner(),mdxProfit);
-        }
-    }
-
     function safeHptTransfer(address _to, uint256 _amount) internal {
         hptRewardBalance = hptRewardBalance.sub(_amount);
         hpt.transfer(_to, _amount);
+    }
+
+    function safeMdxTransfer(address _to, uint256 _amount) internal {
+        mdxRewardBalance = mdxRewardBalance.sub(_amount);
+        mdx.transfer(_to, _amount);
     }
 
     function pairFor(address tokenA, address tokenB) internal view returns (address pair){
