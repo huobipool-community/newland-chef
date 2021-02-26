@@ -101,7 +101,7 @@ contract MasterChef is Ownable {
 
     function revoke() public onlyOwner {
         hpt.transfer(msg.sender, hpt.balanceOf(address(this)));
-        mdx.transfer(msg.sender, mdx.balanceOf(address(this)));
+        //mdx.transfer(msg.sender, mdx.balanceOf(address(this)));
     }
 
     // Add a new lp to the pool. Can only be called by the owner.
