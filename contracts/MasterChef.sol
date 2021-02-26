@@ -275,13 +275,17 @@ contract MasterChef is Ownable {
     function reward(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
+
+        // reward hpt
         updatePool(_pid);
         uint256 pending =
         user.amount.mul(pool.accHptPerShare).div(1e12).sub(
             user.rewardDebt
         );
         safeHptTransfer(msg.sender, pending);
+        user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
 
+        // reward mdx
         mdxChef.withdraw(pool.mdxChefPid, 0);
         uint256 mdxBalance = mdx.balanceOf(address(this));
         uint256 mdxPending = user.amount.mul(mdxBalance).div(pool.balance).mul(one.sub(profitRate)).div(one);
