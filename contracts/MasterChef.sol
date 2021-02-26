@@ -37,7 +37,7 @@ contract MasterChef is Ownable {
         uint256 accHptPerShare; // Accumulated HPTs per share, times 1e12. See below.
         uint256 mdxChefPid;
         uint256 lpBalance;
-        uint256 accMdxReward;
+        uint256 accRewardBalance;
     }
     // The HPT TOKEN!
     IERC20 public hpt;
@@ -125,8 +125,8 @@ contract MasterChef is Ownable {
             lastRewardBlock: lastRewardBlock,
             accHptPerShare: 0,
             mdxChefPid: _mdxChefPid,
-            balance: 0,
-            mdxRewardBalance: 0
+            lpBalance: 0,
+            accRewardBalance: 0
             })
         );
     }
@@ -200,7 +200,7 @@ contract MasterChef is Ownable {
         UserInfo storage user = userInfo[_pid][_user];
         uint256 mdxPendingBalance;
         (mdxPendingBalance,) = mdxChef.pending(pool.mdxChefPid, address(this));
-        uint totalBalance = pool.mdxRewardBalance.add(mdxPendingBalance);
+        uint totalBalance = pool.accRewardBalance.add(mdxPendingBalance);
         return user.amount.mul(totalBalance).div(pool.lpBalance).sub(
             user.mdxRewardDebt
         );
@@ -291,15 +291,15 @@ contract MasterChef is Ownable {
             rewardMdx(pool);
 
             uint256 mdxPending =
-            user.amount.mul(pool.accMdxReward).div(pool.lpBalance).sub(
+            user.amount.mul(pool.accRewardBalance).div(pool.lpBalance).sub(
                 user.mdxRewardDebt
             );
             mdx.safeTransfer(msg.sender, mdxPending);
         }
-        pool.lpBalance = pool.balance.add(_amount);
+        pool.lpBalance = pool.lpBalance.add(_amount);
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        user.mdxRewardDebt = user.amount.mul(pool.accMdxReward).div(pool.lpBalance);
+        user.mdxRewardDebt = user.amount.mul(pool.accRewardBalance).div(pool.lpBalance);
         emit Deposit(msg.sender, _pid, _amount);
     }
 
@@ -355,15 +355,15 @@ contract MasterChef is Ownable {
         rewardMdx(pool);
 
         uint256 mdxPending =
-        user.amount.mul(pool.accMdxReward).div(pool.lpBalance).sub(
+        user.amount.mul(pool.accRewardBalance).div(pool.lpBalance).sub(
             user.mdxRewardDebt
         );
         mdx.safeTransfer(msg.sender, mdxPending);
 
-        pool.lpBalance = pool.balance.sub(_amount);
+        pool.lpBalance = pool.lpBalance.sub(_amount);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        user.mdxRewardDebt = user.amount.mul(pool.accMdxReward).div(pool.lpBalance);
+        user.mdxRewardDebt = user.amount.mul(pool.accRewardBalance).div(pool.lpBalance);
         emit Withdraw(msg.sender, _pid, _amount);
     }
 
@@ -413,7 +413,7 @@ contract MasterChef is Ownable {
             uint256 delt = mdxBalance.sub(mdxTempBalance);
             uint256 mdxProfit = delt.mul(profitRate).div(one);
             uint256 mdxReward = delt.mul(one.sub(profitRate)).div(one);
-            pool.accMdxReward = mdxTempBalance.add(mdxReward);
+            pool.accRewardBalance = mdxTempBalance.add(mdxReward);
             mdx.transfer(owner(),mdxProfit);
         }
     }
