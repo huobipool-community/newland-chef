@@ -4,6 +4,7 @@ const { expect } = require("chai")
 
 const Chef = artifacts.require("MasterChef")
 const HPT = artifacts.require("IERC20")
+const LP = artifacts.require("IERC20");
 const ERC20Mock = artifacts.require("ERC20MOCK");
 const _mdxFactory = '0xED7d5F38C79115ca12fe6C0041abb22F0A06C300';
 const _WHT = '0x5545153ccfca01fbd7dd11c0b23ba694d9509a6f';
@@ -28,7 +29,7 @@ describe("MasterChef", function () {
 
   beforeEach(async function () {
     this.hpt = await HPT.at(_hptAddress);
-  
+    this.lp = await LP.at(_mdxht);
   })
 
   it("should set correct state variables", async function () {
@@ -49,21 +50,22 @@ describe("MasterChef", function () {
       { from: other }  
     );
 
-    //get lp
-    await this.hpt.approve(this.chef.address,web3.utils.toHex('100000000000000000000000'));
-    
-    await this.hpt.transfer(
-      this.chef.address,
-      web3.utils.toHex('100'),
-      { from: other }  
-    );
-
     let chefHptBalance = await this.hpt.balanceOf(this.chef.address);
     expect(chefHptBalance).to.equal(100)
   })
 
   context("With ERC/LP token added to the field", function () {
     beforeEach(async function () {
+
+      //get lp
+      await this.lp.approve(this.chef.address,web3.utils.toHex('100000000000000000000000'));
+      
+      await this.hpt.transfer(
+        this.chef.address,
+        web3.utils.toHex('100'),
+        { from: other }  
+      );
+
       this.lp = await ERC20Mock.deploy("LPToken", "LP", "10000000000")
 
       await this.lp.transfer(this.alice.address, "1000")
