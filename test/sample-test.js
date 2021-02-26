@@ -1,6 +1,6 @@
 
 const { expect } = require("chai")
-const { time } = require("./utilities")
+//const { time } = require("./utilities")
 
 const Chef = artifacts.require("MasterChef")
 const Dai = artifacts.require("IERC20")
@@ -27,13 +27,9 @@ describe("MasterChef", function () {
   it("should set correct state variables", async function () {
     this.chef = await Chef.new(this.dai.address, "1000", "0", "1000");
 
-    const sushi = await this.chef.sushi()
-    const devaddr = await this.chef.devaddr()
-    const owner = await this.sushi.owner()
+    const dai = await this.chef.hpt();
 
-    expect(sushi).to.equal(this.sushi.address)
-    expect(devaddr).to.equal(this.dev.address)
-    expect(owner).to.equal(this.chef.address)
+    expect(dai).to.equal(this.dai.address)
   })
 
   // context("With ERC/LP token added to the field", function () {

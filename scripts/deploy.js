@@ -1,7 +1,7 @@
 const Chef = artifacts.require("MasterChef");
-const DaiContract = artifacts.require("IERC20");
+const HPTContract = artifacts.require("IERC20");
 
-const daiAddress = '0x6b175474e89094c44da98b954eedeac495271d0f';
+const hptAddress = '0xe499ef4616993730ced0f31fa2703b92b50bb536';
 // const daiAbi = require('../source/abis/dai-abi.json');
 // const daiContract = new web3.eth.Contract(daiAbi,daiAddress);
 function toH(num){
@@ -10,31 +10,28 @@ function toH(num){
 
 async function main(){
 
-    const chef = await Chef.new(daiAddress,"1000000000000000000000", "0", "1000000000000000000000");
+    const chef = await Chef.new(hptAddress,"1000000000000000000000", "0", "1000000000000000000000");
     console.log("Contract Chef is deployed at:", chef.address);
-    // if(chef.deployed){
-    //     console.log("Contract Chef is deployed at:", chef.address);
-    // }
 
     let accounts = await web3.eth.getAccounts();
-    const dai = await DaiContract.at(daiAddress);
+    const hpt = await HPTContract.at(hptAddress);
 
     let ethBalance = await web3.eth.getBalance(accounts[0]) / 1e18;
     console.log('ethBalance:',ethBalance);
-    let daiBalance = await dai.balanceOf(accounts[0]) / 1e18;
-    console.log('daiBalance:',daiBalance);
+    let hptBalance = await hpt.balanceOf(accounts[0]) / 1e18;
+    console.log('hptBalance:',hptBalance);
 
     //approve
-    await dai.approve(chef.address,toH('10000000000000000000000'));
+    await hpt.approve(chef.address,toH('10000000000000000000000'));
     console.log('approved');
 
-    let transferResult = await dai.transfer(
+    let transferResult = await hpt.transfer(
       chef.address,
       toH('10000000000000000000000')  
     );
-    console.log('tranferred dai to Chef.');
-    daiBalance = await dai.balanceOf(accounts[0]) / 1e18;
-    console.log('daiBalance left:',daiBalance);
+    console.log('tranferred 10000 hpt to Chef.');
+    hptBalance = await hpt.balanceOf(accounts[0]) / 1e18;
+    console.log('hptBalance left:',hptBalance);
 }
 
 main()
