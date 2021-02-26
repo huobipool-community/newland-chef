@@ -139,7 +139,7 @@ contract MasterChef is Ownable {
             _allocPoint
         );
         poolInfo[_pid].allocPoint = _allocPoint;
-        poolInfo[_pid].allocPoint = _mdxChefPid;
+        poolInfo[_pid].mdxChefPid = _mdxChefPid;
     }
 
     // Return reward multiplier over the given _from to _to block.
@@ -240,7 +240,7 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
-        IMdexChef(mdxChef).deposit(pool.mdxChefPid, _amount);
+        mdxChef.deposit(pool.mdxChefPid, _amount);
         deposit(_pid, _amount);
     }
 
@@ -254,7 +254,7 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
-        IMdexChef(mdxChef).deposit(pool.mdxChefPid, _amount);
+        mdxChef.deposit(pool.mdxChefPid, _amount);
         deposit(_pid, _amount);
     }
 
