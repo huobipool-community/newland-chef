@@ -27,13 +27,13 @@ async function main(){
   let accounts = await web3.eth.getAccounts();
 
   hpt = await HPTContract.at(hptMainNetAddress);
-  // 300 HPT
+  // 1000 HPT
 
   console.log(accounts[0]);
-  await hpt.transfer(accounts[0], toH('100'),{ from: other });
+  await hpt.transfer(accounts[0], toH('1000000000000000000000'),{ from: other });
 
   console.log('HPT mint success:');
-  console.log((await hpt.balanceOf(accounts[0])).toString());
+  console.log((await hpt.balanceOf(accounts[0])/1e18).toString());
 }
 
 main()
