@@ -206,7 +206,7 @@ contract MasterChef is Ownable {
                 mdxReward.mul(1e12).div(lpSupply)
             );
         }
-        return user.amount.mul(accMdxPerShare).div(1e12).sub(user.rewardDebt);
+        return user.amount.mul(accMdxPerShare).div(1e12).sub(user.mdxRewardDebt);
     }
 
     // Update reward vairables for all pools. Be careful of gas spending!
@@ -238,17 +238,19 @@ contract MasterChef is Ownable {
             hptReward.mul(1e12).div(lpSupply)
         );
 
-        uint256 mdxTempBalance;
+        //claim mdex reward 
+        uint256 mdxBalancePrior = mdx.balanceOf(address(this));
         mdxChef.withdraw(pool.mdxChefPid, 0);
-        uint256 mdxBalance = mdx.balanceOf(address(this));
-        if (mdxBalance > mdxTempBalance) {
-            uint256 delt = mdxBalance.sub(mdxTempBalance);
-            uint256 mdxProfit = delt.mul(profitRate).div(one);
+        uint256 mdxBalanceNew = mdx.balanceOf(address(this));
+        if (mdxBalanceNew > mdxBalancePrior) {
+            uint256 delta = mdxBalanceNew.sub(mdxBalancePrior);
+            //keep profit to owner by profitRate
+            uint256 mdxProfit = delta.mul(profitRate).div(one);
             mdx.transfer(owner(),mdxProfit);
 
-            uint256 mdxReward = delt.sub(mdxProfit);
-            hptRewardBalance = hptRewardBalance.add(mdxReward);
-            pool.accMdxPerShare = pool.accHptPerShare.add(
+            uint256 mdxReward = delta.sub(mdxProfit);
+            mdxRewardBalance = mdxRewardBalance.add(mdxReward);
+            pool.accMdxPerShare = pool.accMdxPerShare.add(
                 mdxReward.mul(1e12).div(lpSupply)
             );
         }
@@ -279,7 +281,7 @@ contract MasterChef is Ownable {
         address token,
         uint amountTokenDesired,
         uint amountTokenMin,
-        uint amountETHMin) public {
+        uint amountETHMin) public payable {
         uint _amount;
         address pair = pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
@@ -298,11 +300,11 @@ contract MasterChef is Ownable {
         UserInfo storage user = userInfo[_pid][msg.sender];
         if (user.amount > 0) {
             // reward hpt
-            uint256 pending =
+            uint256 hptPending =
             user.amount.mul(pool.accHptPerShare).div(1e12).sub(
                 user.rewardDebt
             );
-            safeHptTransfer(msg.sender, pending);
+            safeHptTransfer(msg.sender, hptPending);
 
             // reward mdx
             uint256 mdxPending =
@@ -536,7 +538,4 @@ contract MasterChef is Ownable {
         IWHT(WHT).withdraw(amountETH);
         TransferHelper.safeTransferETH(to, amountETH);
     }
-
-    fallback() external {}
-    receive() payable external {}
 }
