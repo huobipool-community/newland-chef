@@ -7,7 +7,6 @@ const HPT = artifacts.require("IERC20")
 const USDT = artifacts.require("IERC20")
 const LP = artifacts.require("IERC20");
 
-const _mdxRoute = '0xED7d5F38C79115ca12fe6C0041abb22F0A06C300';
 const _mdxFactory = '0xb0b670fc1f7724119963018db0bfa86adb22d941';
 const _WHT = '0x5545153ccfca01fbd7dd11c0b23ba694d9509a6f';
 const _mdxChef = '0xFB03e11D93632D97a8981158A632Dd5986F5E909';
@@ -38,7 +37,7 @@ describe("MasterChef", function () {
   })
  
   it("should set correct state variables", async function () {
-    this.chef = await Chef.new(_hptAddress, "1", "0", "1",
+    this.chef = await Chef.new(_hptAddress, "100000", "0", "1",
       _mdxFactory,
       _WHT,
       _mdxChef,

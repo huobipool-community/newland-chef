@@ -16,7 +16,7 @@ const HPTContract = artifacts.require('IERC20');
 const hptMainNetAddress = '0xe499ef4616993730ced0f31fa2703b92b50bb536';
 
 // Address of Join (has auth) https://changelog.makerdao.com/ -> releases -> contract addresses -> MCD_JOIN_DAI
-const other = '0x949D75C679921BbBe3e92721fA2f312B7E1aD021';
+const other = '0x124a9013652a6FDB8c7be1C5201850F448aA4Bbf';
 
 function toH(num){
   return web3.utils.toHex(num);
