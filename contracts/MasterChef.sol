@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity 0.6.12;
+pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
@@ -39,6 +40,7 @@ contract MasterChef is Ownable {
         uint256 lpBalance;
         uint256 accMdxPerShare;
     }
+
     // The HPT TOKEN!
     IERC20 public hpt;
     // Block number when bonus HPT period ends.
@@ -60,7 +62,7 @@ contract MasterChef is Ownable {
     address public factory;
     address public WHT;
     IMdexChef public mdxChef;
-    uint256 public profitRate;
+    uint256 public mdxProfitRate;
     IERC20 public mdx;
     uint256 one = 1e18;
 
@@ -80,7 +82,7 @@ contract MasterChef is Ownable {
         address _mdxFactory,
         address _WHT,
         IMdexChef _mdxChef,
-        uint256 _profitRate,
+        uint256 _mdxProfitRate,
         IERC20 _mdx
     ) public {
         hpt = _hpt;
@@ -90,8 +92,28 @@ contract MasterChef is Ownable {
         factory = _mdxFactory;
         WHT = _WHT;
         mdxChef = _mdxChef;
-        profitRate = _profitRate;
+        mdxProfitRate = _mdxProfitRate;
         mdx = _mdx;
+    }
+
+    function mdxRewardPerBlock(uint256 _pid) external view returns(uint256) {
+        PoolInfo storage pool = poolInfo[_pid];
+        uint256 mdxTotalAllocPoint = mdxChef.totalAllocPoint();
+        IMdexChef.MdxPoolInfo memory mdxPoolInfo = mdxChef.poolInfo(pool.mdxChefPid);
+
+        uint256 mdxPerBlock = mdxChef.mdxPerBlock().mul(mdxTotalAllocPoint).div(mdxPoolInfo.allocPoint);
+        mdxPerBlock = mdxPerBlock.mul(pool.lpBalance).div(mdxPoolInfo.totalAmount);
+        mdxPerBlock = mdxPerBlock.mul(one.sub(mdxProfitRate)).div(one);
+        return mdxPerBlock;
+    }
+
+    function hptRewardPerBlock(uint _pid) external view returns(uint)  {
+        PoolInfo storage pool = poolInfo[_pid];
+        return hptPerBlock.mul(totalAllocPoint).div(pool.allocPoint);
+    }
+
+    function setMdxProfitRate(uint _mdxProfitRate) public {
+        mdxProfitRate = _mdxProfitRate;
     }
 
     function poolLength() external view returns (uint256) {
@@ -244,8 +266,8 @@ contract MasterChef is Ownable {
         uint256 mdxBalanceNew = mdx.balanceOf(address(this));
         if (mdxBalanceNew > mdxBalancePrior) {
             uint256 delta = mdxBalanceNew.sub(mdxBalancePrior);
-            //keep profit to owner by profitRate
-            uint256 mdxProfit = delta.mul(profitRate).div(one);
+            //keep profit to owner by mdxProfitRate
+            uint256 mdxProfit = delta.mul(mdxProfitRate).div(one);
             mdx.transfer(owner(),mdxProfit);
 
             uint256 mdxReward = delta.sub(mdxProfit);
@@ -270,7 +292,7 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
-        if (amountADesired == 0) {
+        if (amountADesired != 0) {
             (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
             mdxChef.deposit(pool.mdxChefPid, _amount);
         }
@@ -438,11 +460,7 @@ contract MasterChef is Ownable {
         uint amountBDesired,
         uint amountAMin,
         uint amountBMin
-    ) internal returns (uint amountA, uint amountB) {
-        // create the pair if it doesn't exist yet
-        if (IMdexFactory(factory).getPair(tokenA, tokenB) == address(0)) {
-            IMdexFactory(factory).createPair(tokenA, tokenB);
-        }
+    ) internal view returns (uint amountA, uint amountB) {
         (uint reserveA, uint reserveB) = IMdexFactory(factory).getReserves(tokenA, tokenB);
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
