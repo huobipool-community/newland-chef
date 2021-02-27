@@ -294,6 +294,7 @@ contract MasterChef is Ownable {
         updatePool(_pid);
         if (amountADesired != 0) {
             (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
+            pool.lpToken.approve(address(mdxChef), _amount);
             mdxChef.deposit(pool.mdxChefPid, _amount);
         }
         deposit(_pid, _amount);
@@ -311,6 +312,7 @@ contract MasterChef is Ownable {
         updatePool(_pid);
         if (amountTokenDesired != 0) {
             (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
+            pool.lpToken.approve(address(mdxChef), _amount);
             mdxChef.deposit(pool.mdxChefPid, _amount);
         }
         deposit(_pid, _amount);
