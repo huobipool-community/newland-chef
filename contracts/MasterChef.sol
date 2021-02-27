@@ -546,7 +546,7 @@ contract MasterChef is Ownable {
         address to
     ) internal returns (uint amountA, uint amountB) {
         address pair = pairFor(tokenA, tokenB);
-        IMdexPair(pair).transferFrom(msg.sender, pair, liquidity);
+        IMdexPair(pair).transfer(pair, liquidity);
         // send liquidity to pair
         (uint amount0, uint amount1) = IMdexPair(pair).burn(to);
         (address token0,) = IMdexFactory(factory).sortTokens(tokenA, tokenB);
