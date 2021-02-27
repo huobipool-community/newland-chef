@@ -9,7 +9,7 @@ function toH(num){
 }
 
 async function main(){
-
+    
     const chef = await Chef.new(hptAddress,"1000000000000000000000", "0", "1000000000000000000000");
     console.log("Contract Chef is deployed at:", chef.address);
 
