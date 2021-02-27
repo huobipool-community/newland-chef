@@ -552,4 +552,7 @@ contract MasterChef is Ownable {
         require(amountA >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
         require(amountB >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
     }
+
+    fallback() external {}
+    receive() payable external {}
 }
