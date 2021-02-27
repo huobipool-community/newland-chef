@@ -361,11 +361,7 @@ contract MasterChef is Ownable {
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
-            uint amtA;
-            uint amtB;
-            (amtA, amtB) = removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, address(this));
-            TransferHelper.safeTransfer(tokenA, msg.sender, amtA);
-            TransferHelper.safeTransfer(tokenB, msg.sender, amtB);
+            removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
         }
     }
 
@@ -381,11 +377,12 @@ contract MasterChef is Ownable {
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
-            uint amtToken;
-            uint amtETH;
-            (amtToken, amtETH) = removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, address(this));
-            TransferHelper.safeTransfer(token, msg.sender, amtToken);
-            TransferHelper.safeTransferETH(msg.sender, amtETH);
+            uint amountToken;
+            uint amountETH;
+            (amountToken, amountETH) = removeLiquidity(token, WHT, liquidity, amountTokenMin, amountETHMin, address(this));
+            TransferHelper.safeTransfer(token, msg.sender, amountToken);
+            IWHT(WHT).withdraw(amountETH);
+            TransferHelper.safeTransferETH(msg.sender, amountETH);
         }
     }
 
@@ -427,11 +424,7 @@ contract MasterChef is Ownable {
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
-        uint amtA;
-        uint amtB;
-        (amtA, amtB) = removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, address(this));
-        TransferHelper.safeTransfer(tokenA, msg.sender, amtA);
-        TransferHelper.safeTransfer(tokenB, msg.sender, amtB);
+        removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, msg.sender);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
@@ -448,11 +441,12 @@ contract MasterChef is Ownable {
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
-        uint amtToken;
-        uint amtETH;
-        (amtToken, amtETH) = removeLiquidityETH(token, user.amount, amountTokenMin, amountETHMin, address(this));
-        TransferHelper.safeTransfer(token, msg.sender, amtToken);
-        TransferHelper.safeTransferETH(msg.sender, amtETH);
+        uint amountToken;
+        uint amountETH;
+        (amountToken, amountETH) = removeLiquidity(token, WHT, user.amount, amountTokenMin, amountETHMin, address(this));
+        TransferHelper.safeTransfer(token, msg.sender, amountToken);
+        IWHT(WHT).withdraw(amountETH);
+        TransferHelper.safeTransferETH(msg.sender, amountETH);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
@@ -557,25 +551,5 @@ contract MasterChef is Ownable {
         (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
         require(amountA >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
         require(amountB >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
-    }
-
-    function removeLiquidityETH(
-        address token,
-        uint liquidity,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to
-    ) internal returns (uint amountToken, uint amountETH) {
-        (amountToken, amountETH) = removeLiquidity(
-            token,
-            WHT,
-            liquidity,
-            amountTokenMin,
-            amountETHMin,
-            address(this)
-        );
-        TransferHelper.safeTransfer(token, to, amountToken);
-        IWHT(WHT).withdraw(amountETH);
-        TransferHelper.safeTransferETH(to, amountETH);
     }
 }
