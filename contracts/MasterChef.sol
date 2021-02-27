@@ -357,8 +357,11 @@ contract MasterChef is Ownable {
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
-            pool.lpToken.transfer(msg.sender, liquidity);
-            removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
+            uint amtA;
+            uint amtB;
+            (amtA, amtB) = removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, address(this));
+            TransferHelper.safeTransfer(tokenA, msg.sender, amtA);
+            TransferHelper.safeTransfer(tokenB, msg.sender, amtB);
         }
     }
 
@@ -374,8 +377,11 @@ contract MasterChef is Ownable {
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
-            pool.lpToken.transfer(msg.sender, liquidity);
-            removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, msg.sender);
+            uint amtToken;
+            uint amtETH;
+            (amtToken, amtETH) = removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, address(this));
+            TransferHelper.safeTransfer(token, msg.sender, amtToken);
+            TransferHelper.safeTransferETH(msg.sender, amtETH);
         }
     }
 
@@ -417,8 +423,11 @@ contract MasterChef is Ownable {
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
-        pool.lpToken.transfer(msg.sender, user.amount);
-        removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, msg.sender);
+        uint amtA;
+        uint amtB;
+        (amtA, amtB) = removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, address(this));
+        TransferHelper.safeTransfer(tokenA, msg.sender, amtA);
+        TransferHelper.safeTransfer(tokenB, msg.sender, amtB);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
@@ -435,8 +444,11 @@ contract MasterChef is Ownable {
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
-        pool.lpToken.transfer(msg.sender, user.amount);
-        removeLiquidityETH(token, user.amount, amountTokenMin, amountETHMin, msg.sender);
+        uint amtToken;
+        uint amtETH;
+        (amtToken, amtETH) = removeLiquidityETH(token, user.amount, amountTokenMin, amountETHMin, address(this));
+        TransferHelper.safeTransfer(token, msg.sender, amtToken);
+        TransferHelper.safeTransferETH(msg.sender, amtETH);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
