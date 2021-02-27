@@ -344,7 +344,7 @@ contract MasterChef is Ownable {
         pool.lpBalance = pool.lpBalance.add(_amount);
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        user.mdxRewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
+        user.mdxRewardDebt = user.amount.mul(pool.accMdxPerShare).div(1e12);
         emit Deposit(msg.sender, _pid, _amount);
     }
 
