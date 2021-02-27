@@ -357,6 +357,7 @@ contract MasterChef is Ownable {
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
+            pool.lpToken.transfer(msg.sender, liquidity);
             removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
         }
     }
@@ -373,6 +374,7 @@ contract MasterChef is Ownable {
         withdraw(_pid, liquidity);
         if (liquidity != 0) {
             mdxChef.withdraw(pool.mdxChefPid, liquidity);
+            pool.lpToken.transfer(msg.sender, liquidity);
             removeLiquidityETH(token, liquidity, amountTokenMin, amountETHMin, msg.sender);
         }
     }
@@ -415,6 +417,7 @@ contract MasterChef is Ownable {
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
+        pool.lpToken.transfer(msg.sender, user.amount);
         removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, msg.sender);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
@@ -432,6 +435,7 @@ contract MasterChef is Ownable {
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
+        pool.lpToken.transfer(msg.sender, user.amount);
         removeLiquidityETH(token, user.amount, amountTokenMin, amountETHMin, msg.sender);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
