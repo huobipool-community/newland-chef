@@ -7,22 +7,22 @@ async function run() {
 
     let poolLen = await mdxChef.methods['poolLength']().call()
     for(let i = 0; i<poolLen; i++) {
-        let info = await mdxChef.methods['poolInfo'](i).call();
-        let mdxPair = new web3.eth.Contract(require('../source/abis/mdxPair-abi'), info.lpToken)
+        try {
+            let info = await mdxChef.methods['poolInfo'](i).call();
+            let mdxPair = new web3.eth.Contract(require('../source/abis/mdxPair-abi'), info.lpToken)
 
-        let token0 = await mdxPair.methods['token0']().call();
-        let token1 = await mdxPair.methods['token1']().call();
+            let token0 = await mdxPair.methods['token0']().call();
+            let token1 = await mdxPair.methods['token1']().call();
 
-        let symbol0 = erc20Query(token0, 'symbol');
-        let symbol1 = erc20Query(token1, 'symbol');
+            let symbol0 = await erc20Query(token0, 'symbol');
+            let symbol1 = await erc20Query(token1, 'symbol');
 
-        console.log(`
+            console.log(`
 ------ ${i} ${info.lpToken}
 ${symbol0} ${token0}
 ${symbol1} ${token1}
         `)
-
-
+        }catch (e) {}
     }
 }
 
