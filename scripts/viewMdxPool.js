@@ -18,7 +18,7 @@ async function run() {
             let symbol1 = await erc20Query(token1, 'symbol');
 
             console.log(`
------- ${i} ${info.lpToken}
+------ ${i} ${info.lpToken} ${info.allocPoint}
 ${symbol0} ${token0}
 ${symbol1} ${token1}
         `)
