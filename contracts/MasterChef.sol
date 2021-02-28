@@ -99,8 +99,8 @@ contract MasterChef is Ownable {
     }
 
     function setHptPerBlock(uint _hptPerBlock) public onlyOwner {
-        hptPerBlock = _hptPerBlock;
         massUpdatePools();
+        hptPerBlock = _hptPerBlock;
     }
 
     function mdxRewardPerBlock(uint256 _pid) external view returns(uint256) {
@@ -120,8 +120,8 @@ contract MasterChef is Ownable {
     }
 
     function setMdxProfitRate(uint _mdxProfitRate) public onlyOwner {
-        mdxProfitRate = _mdxProfitRate;
         massUpdatePools();
+        mdxProfitRate = _mdxProfitRate;
     }
 
     function poolLength() external view returns (uint256) {
