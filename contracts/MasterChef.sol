@@ -59,6 +59,8 @@ contract MasterChef is Ownable {
     uint256 public startBlock;
     uint256 public hptRewardBalance;
     uint256 public mdxRewardBalance;
+    uint256 public hptRewardTotal;
+    uint256 public mdxRewardTotal;
     address public factory;
     address public WHT;
     IMdexChef public mdxChef;
@@ -262,6 +264,7 @@ contract MasterChef is Ownable {
             totalAllocPoint
         );
         hptRewardBalance = hptRewardBalance.add(hptReward);
+        hptRewardTotal = hptRewardTotal.add(hptReward);
         pool.accHptPerShare = pool.accHptPerShare.add(
             hptReward.mul(1e12).div(lpSupply)
         );
@@ -278,6 +281,7 @@ contract MasterChef is Ownable {
 
             uint256 mdxReward = delta.sub(mdxProfit);
             mdxRewardBalance = mdxRewardBalance.add(mdxReward);
+            mdxRewardTotal = mdxRewardTotal.add(mdxReward);
             pool.accMdxPerShare = pool.accMdxPerShare.add(
                 mdxReward.mul(1e12).div(lpSupply)
             );
