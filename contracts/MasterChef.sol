@@ -98,6 +98,7 @@ contract MasterChef is Ownable {
 
     function setHptPerBlock(uint _hptPerBlock) public onlyOwner {
         hptPerBlock = _hptPerBlock;
+        massUpdatePools();
     }
 
     function mdxRewardPerBlock(uint256 _pid) external view returns(uint256) {
@@ -118,6 +119,7 @@ contract MasterChef is Ownable {
 
     function setMdxProfitRate(uint _mdxProfitRate) public onlyOwner {
         mdxProfitRate = _mdxProfitRate;
+        massUpdatePools();
     }
 
     function poolLength() external view returns (uint256) {
@@ -430,6 +432,7 @@ contract MasterChef is Ownable {
         user.amount = 0;
         user.rewardDebt = 0;
         user.mdxRewardDebt = 0;
+        pool.lpBalance = pool.lpBalance.sub(user.amount);
     }
 
     function emergencyWithdrawETH(uint256 _pid,
@@ -452,6 +455,7 @@ contract MasterChef is Ownable {
         user.amount = 0;
         user.rewardDebt = 0;
         user.mdxRewardDebt = 0;
+        pool.lpBalance = pool.lpBalance.sub(user.amount);
     }
 
     function safeHptTransfer(address _to, uint256 _amount) internal {
