@@ -43,12 +43,8 @@ contract MasterChef is Ownable {
 
     // The HPT TOKEN!
     IERC20 public hpt;
-    // Block number when bonus HPT period ends.
-    uint256 public bonusEndBlock;
     // HPT tokens created per block.
     uint256 public hptPerBlock;
-    // Bonus muliplier for early hpt makers.
-    uint256 public constant BONUS_MULTIPLIER = 10;
     // Info of each pool.
     PoolInfo[] public poolInfo;
     // Info of each user that stakes LP tokens.
@@ -80,7 +76,6 @@ contract MasterChef is Ownable {
         IERC20 _hpt,
         uint256 _hptPerBlock,
         uint256 _startBlock,
-        uint256 _bonusEndBlock,
         address _mdxFactory,
         address _WHT,
         IMdexChef _mdxChef,
@@ -89,7 +84,6 @@ contract MasterChef is Ownable {
     ) public {
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
-        bonusEndBlock = _bonusEndBlock;
         startBlock = _startBlock;
         factory = _mdxFactory;
         WHT = _WHT;
@@ -108,7 +102,7 @@ contract MasterChef is Ownable {
         uint256 mdxTotalAllocPoint = mdxChef.totalAllocPoint();
         IMdexChef.MdxPoolInfo memory mdxPoolInfo = mdxChef.poolInfo(pool.mdxChefPid);
 
-        uint256 mdxPerBlock = mdxChef.mdxPerBlock().mul(mdxTotalAllocPoint).div(mdxPoolInfo.allocPoint);
+        uint256 mdxPerBlock = mdxChef.mdxPerBlock().mul(mdxPoolInfo.allocPoint).div(mdxTotalAllocPoint);
         mdxPerBlock = mdxPerBlock.mul(pool.lpBalance).div(mdxPoolInfo.totalAmount);
         mdxPerBlock = mdxPerBlock.mul(one.sub(mdxProfitRate)).div(one);
         return mdxPerBlock;
@@ -116,7 +110,7 @@ contract MasterChef is Ownable {
 
     function hptRewardPerBlock(uint _pid) external view returns(uint)  {
         PoolInfo storage pool = poolInfo[_pid];
-        return hptPerBlock.mul(totalAllocPoint).div(pool.allocPoint);
+        return hptPerBlock.mul(pool.allocPoint).div(totalAllocPoint);
     }
 
     function setMdxProfitRate(uint _mdxProfitRate) public onlyOwner {
@@ -180,19 +174,10 @@ contract MasterChef is Ownable {
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to)
     public
-    view
+    pure
     returns (uint256)
     {
-        if (_to <= bonusEndBlock) {
-            return _to.sub(_from).mul(BONUS_MULTIPLIER);
-        } else if (_from >= bonusEndBlock) {
-            return _to.sub(_from);
-        } else {
-            return
-            bonusEndBlock.sub(_from).mul(BONUS_MULTIPLIER).add(
-                _to.sub(bonusEndBlock)
-            );
-        }
+        return _to.sub(_from);
     }
 
     // View function to see pending HPTs on frontend.
