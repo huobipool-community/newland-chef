@@ -448,24 +448,22 @@ contract MasterChef is Ownable {
     }
 
     function safeHptTransfer(address _to, uint256 _amount) internal {
+        hptRewardBalance = hptRewardBalance.sub(_amount);
         uint256 hptBal = hpt.balanceOf(address(this));
         if (_amount > hptBal) {
             hpt.transfer(_to, hptBal);
-            hptRewardBalance = hptRewardBalance.sub(hptBal);
         } else {
             hpt.transfer(_to, _amount);
-            hptRewardBalance = hptRewardBalance.sub(_amount);
         }
     }
 
     function safeMdxTransfer(address _to, uint256 _amount) internal {
+        mdxRewardBalance = mdxRewardBalance.sub(_amount);
         uint256 mdxBal = mdx.balanceOf(address(this));
         if (_amount > mdxBal) {
             mdx.transfer(_to, mdxBal);
-            mdxRewardBalance = mdxRewardBalance.sub(mdxBal);
         } else {
             mdx.transfer(_to, _amount);
-            mdxRewardBalance = mdxRewardBalance.sub(_amount);
         }
     }
 
