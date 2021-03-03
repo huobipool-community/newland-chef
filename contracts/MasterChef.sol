@@ -412,6 +412,8 @@ contract MasterChef is Ownable {
         uint amountBMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
+        address pair = pairFor(tokenA, tokenB);
+        require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
@@ -430,6 +432,8 @@ contract MasterChef is Ownable {
         uint amountETHMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
+        address pair = pairFor(token, WHT);
+        require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
 
         mdxChef.withdraw(pool.mdxChefPid, user.amount);
@@ -438,13 +442,14 @@ contract MasterChef is Ownable {
         (amountToken, amountETH) = removeLiquidity(token, WHT, user.amount, amountTokenMin, amountETHMin, address(this));
         TransferHelper.safeTransfer(token, msg.sender, amountToken);
         IWHT(WHT).withdraw(amountETH);
-        TransferHelper.safeTransferETH(msg.sender, amountETH);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
         user.mdxRewardDebt = 0;
         pool.lpBalance = pool.lpBalance.sub(user.amount);
+
+        TransferHelper.safeTransferETH(msg.sender, amountETH);
     }
 
     function safeHptTransfer(address _to, uint256 _amount) internal {
