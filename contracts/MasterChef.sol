@@ -63,6 +63,7 @@ contract MasterChef is Ownable {
     uint256 public mdxProfitRate;
     IERC20 public mdx;
     uint256 one = 1e18;
+    address public profitAddress;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -80,7 +81,8 @@ contract MasterChef is Ownable {
         address _WHT,
         IMdexChef _mdxChef,
         uint256 _mdxProfitRate,
-        IERC20 _mdx
+        IERC20 _mdx,
+        address _profitAddress
     ) public {
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
@@ -90,6 +92,11 @@ contract MasterChef is Ownable {
         mdxChef = _mdxChef;
         mdxProfitRate = _mdxProfitRate;
         mdx = _mdx;
+        profitAddress = _profitAddress;
+    }
+
+    function setProfitAddress(address _profitAddress) public onlyOwner {
+        profitAddress = _profitAddress;
     }
 
     function setHptPerBlock(uint _hptPerBlock) public onlyOwner {
@@ -262,7 +269,7 @@ contract MasterChef is Ownable {
             uint256 delta = mdxBalanceNew.sub(mdxBalancePrior);
             //keep profit to owner by mdxProfitRate
             uint256 mdxProfit = delta.mul(mdxProfitRate).div(one);
-            mdx.transfer(owner(),mdxProfit);
+            mdx.transfer(profitAddress, mdxProfit);
 
             uint256 mdxReward = delta.sub(mdxProfit);
             mdxRewardBalance = mdxRewardBalance.add(mdxReward);
