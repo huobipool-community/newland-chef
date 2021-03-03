@@ -420,10 +420,10 @@ contract MasterChef is Ownable {
         removeLiquidity(tokenA, tokenB, user.amount, amountAMin, amountBMin, msg.sender);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
+        pool.lpBalance = pool.lpBalance.sub(user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
         user.mdxRewardDebt = 0;
-        pool.lpBalance = pool.lpBalance.sub(user.amount);
     }
 
     function emergencyWithdrawETH(uint256 _pid,
@@ -444,10 +444,10 @@ contract MasterChef is Ownable {
         IWHT(WHT).withdraw(amountETH);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
+        pool.lpBalance = pool.lpBalance.sub(user.amount);
         user.amount = 0;
         user.rewardDebt = 0;
         user.mdxRewardDebt = 0;
-        pool.lpBalance = pool.lpBalance.sub(user.amount);
 
         TransferHelper.safeTransferETH(msg.sender, amountETH);
     }
