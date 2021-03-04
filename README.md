@@ -4,6 +4,10 @@
 
 ##### revoke 提取合约内的全部HPT
 
+##### setTreasuryAddress 设置收益地址
+
+- _treasuryAddress 类型address
+
 ##### transferOwnership 转移owner权限
 
 - newOwner 类型address
