@@ -5,7 +5,7 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-interface IMdexChef {
+interface ILavaChef {
     // Info of each pool.
     struct LavaPoolInfo {
         IERC20 lpToken;           // Address of LP token contract.
@@ -19,7 +19,7 @@ interface IMdexChef {
     function pending(uint256 _pid, address _user) external view returns (uint256, uint256);
     function deposit(uint256 _pid, uint256 _amount) external;
     function withdraw(uint256 _pid, uint256 _amount) external;
-    function mdxPerBlock() external view returns(uint256);
+    function lavaPerBlock() external view returns(uint256);
     function poolInfo(uint256 i) external view returns(LavaPoolInfo memory);
     function totalAllocPoint() external view returns(uint256);
 }
