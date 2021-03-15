@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "flatten": "npx hardhat flatten  contracts/MasterChef.sol > contracts/flatten.sol"
+    "flattenMdx": "npx hardhat flatten  contracts/MasterChef.sol > contracts/flatten.sol",
+    "flattenLava": "npx hardhat flatten  contracts/LavaMasterChef.sol > contracts/flatten.sol"
   },
   "keywords": [],
   "author": "",

@@ -108,9 +108,10 @@ contract MasterChef is Ownable {
         PoolInfo storage pool = poolInfo[_pid];
         uint256 lavaTotalAllocPoint = lavaChef.totalAllocPoint();
         ILavaChef.LavaPoolInfo memory lavaPoolInfo = lavaChef.poolInfo(pool.lavaChefPid);
+        uint totalAmount = lavaPoolInfo.lpToken.balanceOf(address(lavaChef));
 
-        uint256 lavaPerBlock = lavaChef.lavaPerBlock().mul(lavaPoolInfo.allocPoint).div(lavaTotalAllocPoint);
-        lavaPerBlock = lavaPerBlock.mul(pool.lpBalance).div(lavaPoolInfo.totalAmount);
+        uint256 lavaPerBlock = lavaChef.sushiPerBlock().mul(lavaPoolInfo.allocPoint).div(lavaTotalAllocPoint);
+        lavaPerBlock = lavaPerBlock.mul(pool.lpBalance).div(totalAmount);
         lavaPerBlock = lavaPerBlock.mul(one.sub(lavaProfitRate)).div(one);
         return lavaPerBlock;
     }
@@ -223,7 +224,7 @@ contract MasterChef is Ownable {
         uint256 lpSupply = pool.lpBalance;
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 lavaReward;
-            (lavaReward,) = lavaChef.pending(pool.lavaChefPid, address(this));
+            (lavaReward,) = lavaChef.pendingSushi(pool.lavaChefPid, address(this));
             accLavaPerShare = accLavaPerShare.add(
                 lavaReward.mul(1e12).div(lpSupply)
             );
