@@ -14,7 +14,7 @@ interface ILavaChef {
         uint256 accMdxPerShare; // Accumulated MDXs per share, times 1e12.
     }
 
-    function pendingSushi(uint256 _pid, address _user) external view returns (uint256, uint256);
+    function pendingSushi(uint256 _pid, address _user) external view returns (uint256);
     function deposit(uint256 _pid, uint256 _amount) external;
     function withdraw(uint256 _pid, uint256 _amount) external;
     function sushiPerBlock() external view returns(uint256);

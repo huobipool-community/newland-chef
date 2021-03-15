@@ -224,8 +224,7 @@ contract MasterChef is Ownable {
         uint256 accLavaPerShare = pool.accLavaPerShare;
         uint256 lpSupply = pool.lpBalance;
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 lavaReward;
-            (lavaReward,) = lavaChef.pendingSushi(pool.lavaChefPid, address(this));
+            uint256 lavaReward = lavaChef.pendingSushi(pool.lavaChefPid, address(this));
             accLavaPerShare = accLavaPerShare.add(
                 lavaReward.mul(1e12).div(lpSupply)
             );
