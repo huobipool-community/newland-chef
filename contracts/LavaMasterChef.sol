@@ -13,6 +13,7 @@ import "./interface/ILavaPair.sol";
 import "./interface/IWHT.sol";
 import "./interface/ILavaChef.sol";
 import "./library/TransferHelper.sol";
+import "./library/LavaSwapLibrary.sol";
 
 // MasterChef is the master of Hpt. He can make Hpt and he is a fair guy.
 //
@@ -291,7 +292,7 @@ contract MasterChef is Ownable {
         uint amountAMin,
         uint amountBMin) public {
         uint _amount;
-        address pair = pairFor(tokenA, tokenB);
+        address pair = getPair(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
@@ -309,7 +310,7 @@ contract MasterChef is Ownable {
         uint amountTokenMin,
         uint amountETHMin) public payable {
         uint _amount;
-        address pair = pairFor(token, WHT);
+        address pair = getPair(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
@@ -353,7 +354,7 @@ contract MasterChef is Ownable {
         uint liquidity,
         uint amountAMin,
         uint amountBMin) public {
-        address pair = pairFor(tokenA, tokenB);
+        address pair = getPair(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
@@ -369,7 +370,7 @@ contract MasterChef is Ownable {
         uint liquidity,
         uint amountTokenMin,
         uint amountETHMin) public {
-        address pair = pairFor(token, WHT);
+        address pair = getPair(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
@@ -420,7 +421,7 @@ contract MasterChef is Ownable {
         uint amountBMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        address pair = pairFor(tokenA, tokenB);
+        address pair = getPair(tokenA, tokenB);
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
 
@@ -440,7 +441,7 @@ contract MasterChef is Ownable {
         uint amountETHMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        address pair = pairFor(token, WHT);
+        address pair = getPair(token, WHT);
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
 
@@ -480,8 +481,8 @@ contract MasterChef is Ownable {
         }
     }
 
-    function pairFor(address tokenA, address tokenB) internal view returns (address pair){
-        pair = ILavaFactory(factory).pairFor(tokenA, tokenB);
+    function getPair(address tokenA, address tokenB) internal view returns (address pair){
+        pair = ILavaFactory(factory).getPair(tokenA, tokenB);
     }
 
     // **** ADD LIQUIDITY ****
@@ -493,16 +494,16 @@ contract MasterChef is Ownable {
         uint amountAMin,
         uint amountBMin
     ) internal view returns (uint amountA, uint amountB) {
-        (uint reserveA, uint reserveB) = ILavaFactory(factory).getReserves(tokenA, tokenB);
+        (uint reserveA, uint reserveB) = LavaSwapLibrary.getReserves(factory, tokenA, tokenB);
         if (reserveA == 0 && reserveB == 0) {
             (amountA, amountB) = (amountADesired, amountBDesired);
         } else {
-            uint amountBOptimal = ILavaFactory(factory).quote(amountADesired, reserveA, reserveB);
+            uint amountBOptimal = LavaSwapLibrary.quote(amountADesired, reserveA, reserveB);
             if (amountBOptimal <= amountBDesired) {
                 require(amountBOptimal >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
                 (amountA, amountB) = (amountADesired, amountBOptimal);
             } else {
-                uint amountAOptimal = ILavaFactory(factory).quote(amountBDesired, reserveB, reserveA);
+                uint amountAOptimal = LavaSwapLibrary.quote(amountBDesired, reserveB, reserveA);
                 assert(amountAOptimal <= amountADesired);
                 require(amountAOptimal >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
                 (amountA, amountB) = (amountAOptimal, amountBDesired);
@@ -520,7 +521,7 @@ contract MasterChef is Ownable {
         address to
     ) internal returns (uint amountA, uint amountB, uint liquidity) {
         (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
-        address pair = pairFor(tokenA, tokenB);
+        address pair = getPair(tokenA, tokenB);
         TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
         TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
         liquidity = ILavaPair(pair).mint(to);
@@ -541,7 +542,7 @@ contract MasterChef is Ownable {
             amountTokenMin,
             amountETHMin
         );
-        address pair = pairFor(token, WHT);
+        address pair = getPair(token, WHT);
         TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
         IWHT(WHT).deposit{value : amountETH}();
         assert(IWHT(WHT).transfer(pair, amountETH));
@@ -559,11 +560,11 @@ contract MasterChef is Ownable {
         uint amountBMin,
         address to
     ) internal returns (uint amountA, uint amountB) {
-        address pair = pairFor(tokenA, tokenB);
+        address pair = getPair(tokenA, tokenB);
         ILavaPair(pair).transfer(pair, liquidity);
         // send liquidity to pair
         (uint amount0, uint amount1) = ILavaPair(pair).burn(to);
-        (address token0,) = ILavaFactory(factory).sortTokens(tokenA, tokenB);
+        (address token0,) = LavaSwapLibrary.sortTokens(tokenA, tokenB);
         (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
         require(amountA >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
         require(amountB >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
