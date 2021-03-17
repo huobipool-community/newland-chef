@@ -74,6 +74,13 @@ contract MasterChef is Ownable {
         uint256 amount
     );
 
+    event AmtNotEnoughSend(
+        address indexed user,
+        address currency,
+        uint256 shouldAmt,
+        uint256 actAmt
+    );
+
     constructor(
         IERC20 _hpt,
         uint256 _hptPerBlock,
@@ -465,6 +472,7 @@ contract MasterChef is Ownable {
         uint256 hptBal = hpt.balanceOf(address(this));
         if (_amount > hptBal) {
             hpt.transfer(_to, hptBal);
+            emit AmtNotEnoughSend(_to, address(hpt), _amount, hptBal);
         } else {
             hpt.transfer(_to, _amount);
         }
@@ -475,6 +483,7 @@ contract MasterChef is Ownable {
         uint256 lavaBal = lava.balanceOf(address(this));
         if (_amount > lavaBal) {
             lava.transfer(_to, lavaBal);
+            emit AmtNotEnoughSend(_to, address(lava), _amount, lavaBal);
         } else {
             lava.transfer(_to, _amount);
         }
