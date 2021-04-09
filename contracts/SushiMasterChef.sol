@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interface/ISushiFactory.sol";
 import "./interface/ISushiPair.sol";
-import "./interface/IWHT.sol";
+import "./interface/IWETH.sol";
 import "./interface/ISushiChef.sol";
 import "./library/TransferHelper.sol";
 import "./library/SushiSwapLibrary.sol";
@@ -59,7 +59,7 @@ contract MasterChef is Ownable {
     uint256 public hptRewardTotal;
     uint256 public sushiRewardTotal;
     address public factory;
-    address public WHT;
+    address public WETH;
     ISushiChef public sushiChef;
     uint256 public sushiProfitRate;
     IERC20 public sushi;
@@ -86,7 +86,7 @@ contract MasterChef is Ownable {
         uint256 _hptPerBlock,
         uint256 _startBlock,
         address _sushiFactory,
-        address _WHT,
+        address _WETH,
         ISushiChef _sushiChef,
         uint256 _sushiProfitRate,
         IERC20 _sushi,
@@ -96,7 +96,7 @@ contract MasterChef is Ownable {
         hptPerBlock = _hptPerBlock;
         startBlock = _startBlock;
         factory = _sushiFactory;
-        WHT = _WHT;
+        WETH = _WETH;
         sushiChef = _sushiChef;
         sushiProfitRate = _sushiProfitRate;
         sushi = _sushi;
@@ -316,7 +316,7 @@ contract MasterChef is Ownable {
         uint amountTokenMin,
         uint amountETHMin) public payable {
         uint _amount;
-        address pair = getPair(token, WHT);
+        address pair = getPair(token, WETH);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
@@ -376,7 +376,7 @@ contract MasterChef is Ownable {
         uint liquidity,
         uint amountTokenMin,
         uint amountETHMin) public {
-        address pair = getPair(token, WHT);
+        address pair = getPair(token, WETH);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
@@ -385,9 +385,9 @@ contract MasterChef is Ownable {
             sushiChef.withdraw(pool.sushiChefPid, liquidity);
             uint amountToken;
             uint amountETH;
-            (amountToken, amountETH) = removeLiquidity(token, WHT, liquidity, amountTokenMin, amountETHMin, address(this));
+            (amountToken, amountETH) = removeLiquidity(token, WETH, liquidity, amountTokenMin, amountETHMin, address(this));
             TransferHelper.safeTransfer(token, msg.sender, amountToken);
-            IWHT(WHT).withdraw(amountETH);
+            IWETH(WETH).withdraw(amountETH);
             TransferHelper.safeTransferETH(msg.sender, amountETH);
         }
     }
@@ -447,16 +447,16 @@ contract MasterChef is Ownable {
         uint amountETHMin) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
-        address pair = getPair(token, WHT);
+        address pair = getPair(token, WETH);
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
 
         sushiChef.withdraw(pool.sushiChefPid, user.amount);
         uint amountToken;
         uint amountETH;
-        (amountToken, amountETH) = removeLiquidity(token, WHT, user.amount, amountTokenMin, amountETHMin, address(this));
+        (amountToken, amountETH) = removeLiquidity(token, WETH, user.amount, amountTokenMin, amountETHMin, address(this));
         TransferHelper.safeTransfer(token, msg.sender, amountToken);
-        IWHT(WHT).withdraw(amountETH);
+        IWETH(WETH).withdraw(amountETH);
 
         emit EmergencyWithdraw(msg.sender, _pid, user.amount);
         pool.lpBalance = pool.lpBalance.sub(user.amount);
@@ -544,16 +544,16 @@ contract MasterChef is Ownable {
     ) internal returns (uint amountToken, uint amountETH, uint liquidity) {
         (amountToken, amountETH) = _addLiquidity(
             token,
-            WHT,
+            WETH,
             amountTokenDesired,
             msg.value,
             amountTokenMin,
             amountETHMin
         );
-        address pair = getPair(token, WHT);
+        address pair = getPair(token, WETH);
         TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
-        IWHT(WHT).deposit{value : amountETH}();
-        assert(IWHT(WHT).transfer(pair, amountETH));
+        IWETH(WETH).deposit{value : amountETH}();
+        assert(IWETH(WETH).transfer(pair, amountETH));
         liquidity = ISushiPair(pair).mint(to);
         // refund dust eth, if any
         if (msg.value > amountETH) TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
