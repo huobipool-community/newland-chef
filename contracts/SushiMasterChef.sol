@@ -148,12 +148,9 @@ contract MasterChef is Ownable {
     function add(
         uint256 _allocPoint,
         IERC20 _lpToken,
-        uint _sushiChefPid,
-        bool _withUpdate
+        uint _sushiChefPid
     ) public onlyOwner {
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+        massUpdatePools();
         uint256 lastRewardBlock =
         block.number > startBlock ? block.number : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
@@ -174,12 +171,9 @@ contract MasterChef is Ownable {
     function set(
         uint256 _pid,
         uint256 _allocPoint,
-        uint _sushiChefPid,
-        bool _withUpdate
+        uint _sushiChefPid
     ) public onlyOwner {
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+        massUpdatePools();
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(
             _allocPoint
         );
