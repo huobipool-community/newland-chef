@@ -109,7 +109,7 @@ contract MasterChef is Ownable {
         uint256 mdxTotalAllocPoint = mdxChef.totalAllocPoint();
         IMdexChef.MdxPoolInfo memory mdxPoolInfo = mdxChef.poolInfo(pool.mdxChefPid);
 
-        uint256 mdxPerBlock = mdxChef.mdxPerBlock().mul(mdxPoolInfo.allocPoint).div(mdxTotalAllocPoint);
+        uint256 mdxPerBlock = mdxChef.reward(block.number).mul(mdxPoolInfo.allocPoint).div(mdxTotalAllocPoint);
         mdxPerBlock = mdxPerBlock.mul(pool.lpBalance).div(mdxPoolInfo.totalAmount);
         mdxPerBlock = mdxPerBlock.mul(one.sub(mdxProfitRate)).div(one);
         return mdxPerBlock;

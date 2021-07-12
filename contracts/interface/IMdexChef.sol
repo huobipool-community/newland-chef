@@ -20,6 +20,7 @@ interface IMdexChef {
     function deposit(uint256 _pid, uint256 _amount) external;
     function withdraw(uint256 _pid, uint256 _amount) external;
     function mdxPerBlock() external view returns(uint256);
+    function reward(uint256 blockNumber) external view returns(uint256);
     function poolInfo(uint256 i) external view returns(MdxPoolInfo memory);
     function totalAllocPoint() external view returns(uint256);
 }
