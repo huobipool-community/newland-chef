@@ -16,6 +16,7 @@ import './interface/ITenBankHall.sol';
 import "./interface/IMdexFactory.sol";
 import "./interface/IMdexPair.sol";
 import "./interface/IWHT.sol";
+import "./interface/IActionPools.sol";
 
 contract MdexStakingChef is Ownable{
     using SafeMath for uint256;
@@ -59,7 +60,6 @@ contract MdexStakingChef is Ownable{
     uint256 public miningRewardBalance;
     uint256 public hptRewardTotal;
     uint256 public miningRewardTotal;
-    IMdexChef public miningChef;
     uint256 public miningProfitRate;
     IERC20 public mining;
     uint256 one = 1e18;
@@ -75,7 +75,6 @@ contract MdexStakingChef is Ownable{
         IERC20 _hpt,
         uint256 _hptPerBlock,
         uint256 _startBlock,
-        IMdexChef _miningChef,
         uint256 _miningProfitRate,
         IERC20 _mining,
         address _treasuryAddress,
@@ -85,7 +84,6 @@ contract MdexStakingChef is Ownable{
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
         startBlock = _startBlock;
-        miningChef = _miningChef;
         miningProfitRate = _miningProfitRate;
         mining = _mining;
         treasuryAddress = _treasuryAddress;
@@ -104,17 +102,6 @@ contract MdexStakingChef is Ownable{
     function setHptPerBlock(uint _hptPerBlock) public onlyOwner {
         massUpdatePools();
         hptPerBlock = _hptPerBlock;
-    }
-
-    function miningRewardPerBlock(uint256 _pid) external view returns(uint256) {
-        PoolInfo storage pool = poolInfo[_pid];
-        uint256 miningTotalAllocPoint = miningChef.totalAllocPoint();
-        IMdexChef.MdxPoolInfo memory miningPoolInfo = miningChef.poolInfo(pool.miningChefPid);
-
-        uint256 miningPerBlock = miningChef.reward(block.number).mul(miningPoolInfo.allocPoint).div(miningTotalAllocPoint);
-        miningPerBlock = miningPerBlock.mul(pool.lpBalance).div(miningPoolInfo.totalAmount);
-        miningPerBlock = miningPerBlock.mul(one.sub(miningProfitRate)).div(one);
-        return miningPerBlock;
     }
 
     function hptRewardPerBlock(uint _pid) external view returns(uint)  {
@@ -193,6 +180,13 @@ contract MdexStakingChef is Ownable{
         poolInfo[_pid].lpToken = IERC20(lpToken);
     }
 
+    function getPoolClaimIds(uint pid) internal view returns(uint[] memory) {
+        PoolInfo storage pool = poolInfo[pid];
+        IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
+
+        return acPool.getPoolIndex(address(pool.strategyLink), pool.miningChefPid);
+    }
+
     // Return reward multiplier over the given _from to _to block.
     function getMultiplier(uint256 _from, uint256 _to)
     internal
@@ -265,7 +259,12 @@ contract MdexStakingChef is Ownable{
         uint256 lpSupply = pool.lpBalance;
         if (lpSupply != 0) {
             uint256 miningReward;
-            (miningReward,) = miningChef.pending(pool.miningChefPid, address(this));
+            IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
+            uint[] memory ids = getPoolClaimIds(pool.miningChefPid);
+            for(uint i = 0; i< ids.length; i++) {
+                miningReward += acPool.pendingRewards(ids[i], address(this));
+            }
+
             uint256 miningProfit = miningReward.mul(miningProfitRate).div(one);
             miningReward = miningReward.sub(miningProfit);
             accMiningPerShare = accMiningPerShare.add(
@@ -307,7 +306,8 @@ contract MdexStakingChef is Ownable{
 
         //claim mdex reward
         uint256 miningBalancePrior = mining.balanceOf(address(this));
-        miningChef.withdraw(pool.miningChefPid, 0);
+        IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
+        acPool.claimIds(getPoolClaimIds(pool.miningChefPid));
         uint256 miningBalanceNew = mining.balanceOf(address(this));
         if (miningBalanceNew > miningBalancePrior) {
             uint256 delta = miningBalanceNew.sub(miningBalancePrior);
@@ -422,9 +422,9 @@ contract MdexStakingChef is Ownable{
 
         if (_amount > 0) {
             pool.lpToken.safeTransferFrom(_user, address(this), _amount);
-            pool.lpToken.approve(address(miningChef), 0);
-            pool.lpToken.approve(address(miningChef), _amount);
-            miningChef.deposit(pool.miningChefPid, _amount);
+            pool.lpToken.approve(address(pool.tenBankHall), 0);
+            pool.lpToken.approve(address(pool.tenBankHall), _amount);
+            pool.tenBankHall.depositLPToken(pool.sid, _amount, 0, 0, 0, 0);
         }
 
         pool.lpBalance = pool.lpBalance.add(_amount);
@@ -467,8 +467,7 @@ contract MdexStakingChef is Ownable{
         user.miningRewardDebt = user.amount.mul(pool.accMiningPerShare).div(1e12);
 
         if (_amount > 0) {
-            miningChef.withdraw(pool.miningChefPid, _amount);
-            pool.lpToken.safeTransfer(_user, _amount);
+            pool.tenBankHall.withdrawLPToken(pool.sid, 1e9, 0, 0);
         }
 
         emit Withdraw(_user, _pid, _amount);
@@ -488,6 +487,10 @@ contract MdexStakingChef is Ownable{
     function claimAll(uint _pid, address _user, address to) public {
         claim(_pid, address(hpt), _user, to);
         claim(_pid, address(mining), _user, to);
+    }
+
+    function claimFromBoo() internal {
+
     }
 
     function safeHptTransfer(uint256 pid, PoolInfo memory pool, address _to, uint256 _amount) internal {

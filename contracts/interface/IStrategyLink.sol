@@ -8,7 +8,8 @@ interface IStrategyLink {
     event StrategyBorrow(address indexed strategy, uint256 indexed pid, address indexed user, uint256 borrowAmount);
     event StrategyWithdraw(address indexed strategy, uint256 indexed pid, address indexed user, uint256 amount);
     event StrategyLiquidation(address indexed strategy, uint256 indexed pid, address indexed user, uint256 amount);
-    
+
+    function compActionPool() external view returns(address);
     function bank() external view returns(address);
     function getSource() external view returns (string memory);
     function userInfo(uint256 _pid, address _account) external view returns (uint256,uint256,address,uint256);
