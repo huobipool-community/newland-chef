@@ -17,6 +17,7 @@ import "./interface/IMdexFactory.sol";
 import "./interface/IMdexPair.sol";
 import "./interface/IWHT.sol";
 import "./interface/IActionPools.sol";
+import "./library/TenMath.sol";
 
 contract MdexStakingChef is Ownable{
     using SafeMath for uint256;
@@ -28,6 +29,7 @@ contract MdexStakingChef is Ownable{
         uint256 miningRewardDebt;
         uint256 hptRewarded;  //accumlated total
         uint256 miningRewarded;  //accumlated total
+        uint256 lpPoints;       // deposit proportion
     }
     // Info of each pool.
     struct PoolInfo {
@@ -42,6 +44,8 @@ contract MdexStakingChef is Ownable{
         uint256 lpBalance;
         uint256 accMiningPerShare;
         Treasury treasury;
+        uint256 totalLPReinvest;        // total of lptoken amount with totalLPAmount and reinvest rewards，
+        uint256 totalPoints;
     }
 
     // The HPT TOKEN!
@@ -151,7 +155,9 @@ contract MdexStakingChef is Ownable{
             accHptPerShare: 0,
             lpBalance: 0,
             accMiningPerShare: 0,
-            treasury: treasury
+            treasury: treasury,
+            totalPoints: 0,
+            totalLPReinvest: 0
             })
         );
     }
@@ -324,6 +330,8 @@ contract MdexStakingChef is Ownable{
         }
 
         pool.lastRewardBlock = block.number;
+        uint totalLPReinvest = pool.strategyLink.pendingLPAmount(pool.miningChefPid, address(this));
+        pool.totalLPReinvest = totalLPReinvest >= pool.lpBalance ? totalLPReinvest:pool.lpBalance;
     }
 
 
@@ -364,14 +372,15 @@ contract MdexStakingChef is Ownable{
     function withdrawTokens(uint256 _pid,
         address tokenA,
         address tokenB,
-        uint liquidity,
+        uint rate,
         uint amountAMin,
         uint amountBMin) public {
         address pair = pairFor(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
-        withdraw(_pid, liquidity);
+        withdraw(_pid, rate);
+        uint liquidity = pool.lpToken.balanceOf(address(this));
         if (liquidity != 0) {
             removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
         }
@@ -379,14 +388,15 @@ contract MdexStakingChef is Ownable{
 
     function withdrawETH(uint256 _pid,
         address token,
-        uint liquidity,
+        uint rate,
         uint amountTokenMin,
         uint amountETHMin) public {
         address pair = pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         updatePool(_pid);
-        withdraw(_pid, liquidity);
+        withdraw(_pid, rate);
+        uint liquidity = pool.lpToken.balanceOf(address(this));
         if (liquidity != 0) {
             uint amountToken;
             uint amountETH;
@@ -427,7 +437,16 @@ contract MdexStakingChef is Ownable{
             pool.tenBankHall.depositLPToken(pool.sid, _amount, 0, 0, 0, 0);
         }
 
+        uint256 addPoint = _amount;
+        if(pool.totalLPReinvest > 0) {
+            addPoint = _amount.mul(pool.totalPoints).div(pool.totalLPReinvest);
+        }
+
         pool.lpBalance = pool.lpBalance.add(_amount);
+        pool.totalPoints = pool.totalPoints.add(addPoint);
+        pool.totalLPReinvest = pool.totalLPReinvest.add(_amount);
+
+        user.lpPoints = user.lpPoints.add(addPoint);
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
         user.miningRewardDebt = user.amount.mul(pool.accMiningPerShare).div(1e12);
@@ -435,14 +454,18 @@ contract MdexStakingChef is Ownable{
     }
 
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _amount) public {
+    function withdraw(uint256 _pid, uint256 rate) public {
         address _user = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
 
-        if (user.amount < _amount) {
-            _amount = user.amount;
-        }
+        rate = rate > 1e9 ? 1e9:rate;
+        uint256 removedPoint = user.lpPoints.mul(rate).div(1e9);
+        uint256 withdrawLPTokenAmount = removedPoint.mul(pool.totalLPReinvest).div(pool.totalPoints);
+        withdrawLPTokenAmount = TenMath.min(withdrawLPTokenAmount, pool.totalLPReinvest);
+        uint256 _amount = rate >= 1e9 ? user.amount : user.amount.mul(rate).div(1e9);
+        uint withdrawRate = withdrawLPTokenAmount.div(pool.totalLPReinvest).mul(1e9);
+
         updatePool(_pid);
 
         {
@@ -461,13 +484,22 @@ contract MdexStakingChef is Ownable{
             safeMiningTransfer(_pid, pool, _user, miningPending);
         }
 
+        uint256 addPoint = _amount;
+        if(pool.totalLPReinvest > 0) {
+            addPoint = _amount.mul(pool.totalPoints).div(pool.totalLPReinvest);
+        }
+
         pool.lpBalance = pool.lpBalance.sub(_amount);
+        pool.totalPoints = TenMath.safeSub(pool.totalPoints, removedPoint);
+        pool.totalLPReinvest = TenMath.safeSub(pool.totalLPReinvest, withdrawLPTokenAmount);
+
+        user.lpPoints = TenMath.safeSub(user.lpPoints, removedPoint);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
         user.miningRewardDebt = user.amount.mul(pool.accMiningPerShare).div(1e12);
 
         if (_amount > 0) {
-            pool.tenBankHall.withdrawLPToken(pool.sid, 1e9, 0, 0);
+            pool.tenBankHall.withdrawLPToken(pool.sid, withdrawRate, 0, 0);
         }
 
         emit Withdraw(_user, _pid, _amount);
@@ -489,8 +521,13 @@ contract MdexStakingChef is Ownable{
         claim(_pid, address(mining), _user, to);
     }
 
-    function claimFromBoo() internal {
-
+    function pendingLPAmount(uint256 _pid, address _account) public view returns (uint256 value) {
+        PoolInfo storage pool = poolInfo[_pid];
+        if(pool.totalPoints <= 0) {
+            return 0;
+        }
+        value = userInfo[_pid][_account].lpPoints.mul(pool.totalLPReinvest).div(pool.totalPoints);
+        value = TenMath.min(value, pool.totalLPReinvest);
     }
 
     function safeHptTransfer(uint256 pid, PoolInfo memory pool, address _to, uint256 _amount) internal {
