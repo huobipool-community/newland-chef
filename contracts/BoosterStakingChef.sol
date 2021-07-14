@@ -9,31 +9,37 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interface/IMdexChef.sol";
 import "./library/TransferHelper.sol";
-import "./interface/IStakingRewards.sol";
 import "./Treasury.sol";
-import "./AccessSetting.sol";
+import './interface/IStrategyLink.sol';
+import './interface/ITenBankHall.sol';
 
-contract MdexStakingChef is AccessSetting, IStakingRewards {
+import "./interface/IMdexFactory.sol";
+import "./interface/IMdexPair.sol";
+import "./interface/IWHT.sol";
+
+contract MdexStakingChef is Ownable{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     // Info of each user.
     struct UserInfo {
         uint256 amount; // How many LP tokens the user has provided.
         uint256 rewardDebt; // Reward debt. See explanation below.
-        uint256 mdxRewardDebt;
+        uint256 miningRewardDebt;
         uint256 hptRewarded;  //accumlated total
-        uint256 mdxRewarded;  //accumlated total
-        address goblin;
+        uint256 miningRewarded;  //accumlated total
     }
     // Info of each pool.
     struct PoolInfo {
-        IERC20 lpToken; // Address of LP token contract.
+        ITenBankHall tenBankHall;
+        uint sid;
+        IStrategyLink strategyLink;
         uint256 allocPoint; // How many allocation points assigned to this pool. HPTs to distribute per block.
         uint256 lastRewardBlock; // Last block number that HPTs distribution occurs.
         uint256 accHptPerShare; // Accumulated HPTs per share, times 1e12. See below.
-        uint256 mdxChefPid;
+        uint256 miningChefPid;
+        IERC20 lpToken;
         uint256 lpBalance;
-        uint256 accMdxPerShare;
+        uint256 accMiningPerShare;
         Treasury treasury;
     }
 
@@ -50,16 +56,16 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
     // The block number when HPT mining starts.
     uint256 public startBlock;
     uint256 public hptRewardBalance;
-    uint256 public mdxRewardBalance;
+    uint256 public miningRewardBalance;
     uint256 public hptRewardTotal;
-    uint256 public mdxRewardTotal;
-    IMdexChef public mdxChef;
-    uint256 public mdxProfitRate;
-    IERC20 public mdx;
+    uint256 public miningRewardTotal;
+    IMdexChef public miningChef;
+    uint256 public miningProfitRate;
+    IERC20 public mining;
     uint256 one = 1e18;
     address public treasuryAddress;
-
-    mapping(address => uint) poolLenMap;
+    address public factory;
+    address public WHT;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -69,29 +75,26 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
         IERC20 _hpt,
         uint256 _hptPerBlock,
         uint256 _startBlock,
-        IMdexChef _mdxChef,
-        uint256 _mdxProfitRate,
-        IERC20 _mdx,
-        address _treasuryAddress
+        IMdexChef _miningChef,
+        uint256 _miningProfitRate,
+        IERC20 _mining,
+        address _treasuryAddress,
+        address _mdxFactory,
+        address _WHT
     ) public {
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
         startBlock = _startBlock;
-        mdxChef = _mdxChef;
-        mdxProfitRate = _mdxProfitRate;
-        mdx = _mdx;
+        miningChef = _miningChef;
+        miningProfitRate = _miningProfitRate;
+        mining = _mining;
         treasuryAddress = _treasuryAddress;
+        factory = _mdxFactory;
+        WHT = _WHT;
     }
 
-    function getRewardToken() external view override returns(address) {
-        return address(mdx);
-    }
-
-    function getPid(address lpToken) public view override returns(uint) {
-        if (poolLenMap[lpToken] > 0) {
-            return poolLenMap[lpToken] - 1;
-        }
-        return uint(-1);
+    function getRewardToken() external view returns(address) {
+        return address(mining);
     }
 
     function setTreasuryAddress(address _treasuryAddress) public onlyOwner {
@@ -103,15 +106,15 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
         hptPerBlock = _hptPerBlock;
     }
 
-    function mdxRewardPerBlock(uint256 _pid) external view returns(uint256) {
+    function miningRewardPerBlock(uint256 _pid) external view returns(uint256) {
         PoolInfo storage pool = poolInfo[_pid];
-        uint256 mdxTotalAllocPoint = mdxChef.totalAllocPoint();
-        IMdexChef.MdxPoolInfo memory mdxPoolInfo = mdxChef.poolInfo(pool.mdxChefPid);
+        uint256 miningTotalAllocPoint = miningChef.totalAllocPoint();
+        IMdexChef.MdxPoolInfo memory miningPoolInfo = miningChef.poolInfo(pool.miningChefPid);
 
-        uint256 mdxPerBlock = mdxChef.reward(block.number).mul(mdxPoolInfo.allocPoint).div(mdxTotalAllocPoint);
-        mdxPerBlock = mdxPerBlock.mul(pool.lpBalance).div(mdxPoolInfo.totalAmount);
-        mdxPerBlock = mdxPerBlock.mul(one.sub(mdxProfitRate)).div(one);
-        return mdxPerBlock;
+        uint256 miningPerBlock = miningChef.reward(block.number).mul(miningPoolInfo.allocPoint).div(miningTotalAllocPoint);
+        miningPerBlock = miningPerBlock.mul(pool.lpBalance).div(miningPoolInfo.totalAmount);
+        miningPerBlock = miningPerBlock.mul(one.sub(miningProfitRate)).div(one);
+        return miningPerBlock;
     }
 
     function hptRewardPerBlock(uint _pid) external view returns(uint)  {
@@ -119,64 +122,75 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
         return hptPerBlock.mul(pool.allocPoint).div(totalAllocPoint);
     }
 
-    function setMdxProfitRate(uint _mdxProfitRate) public onlyOwner {
+    function setMiningProfitRate(uint _miningProfitRate) public onlyOwner {
         massUpdatePools();
-        mdxProfitRate = _mdxProfitRate;
+        miningProfitRate = _miningProfitRate;
     }
 
-    function poolLength() external view override returns (uint256) {
+    function poolLength() external view returns (uint256) {
         return poolInfo.length;
     }
 
     function revoke() public onlyOwner {
         hpt.transfer(msg.sender, hpt.balanceOf(address(this)));
-        //mdx.transfer(msg.sender, mdx.balanceOf(address(this)));
     }
 
     // Add a new lp to the pool. Can only be called by the owner.
-    // XXX DO NOT add the same LP token more than once. Rewards will be messed up if you do.
     function add(
         uint256 _allocPoint,
-        IERC20 _lpToken,
-        uint _mdxChefPid
+        ITenBankHall _tenBankHall,
+        uint _sid
     ) public onlyOwner {
-        require(poolLenMap[address(_lpToken)] == 0, 'lp pool already exist');
         massUpdatePools();
         uint256 lastRewardBlock =
         block.number > startBlock ? block.number : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
         Treasury treasury= new Treasury();
-        mdx.approve(address(treasury), uint256(-1));
+        mining.approve(address(treasury), uint256(-1));
         hpt.approve(address(treasury), uint256(-1));
 
+        (,address iLink, uint256 pid) = _tenBankHall.strategyInfo(_sid);
+
+        address lpToken = IStrategyLink(iLink).getPoollpToken(pid);
         poolInfo.push(
             PoolInfo({
-            lpToken: _lpToken,
+            tenBankHall: _tenBankHall,
+            sid: _sid,
+            strategyLink: IStrategyLink(iLink),
+            miningChefPid: pid,
+            lpToken: IERC20(lpToken),
             allocPoint: _allocPoint,
             lastRewardBlock: lastRewardBlock,
             accHptPerShare: 0,
-            mdxChefPid: _mdxChefPid,
             lpBalance: 0,
-            accMdxPerShare: 0,
+            accMiningPerShare: 0,
             treasury: treasury
             })
         );
-        poolLenMap[address(_lpToken)] = poolInfo.length;
     }
 
     // Update the given pool's HPT allocation point. Can only be called by the owner.
     function set(
         uint256 _pid,
         uint256 _allocPoint,
-        uint _mdxChefPid
+        ITenBankHall _tenBankHall,
+        uint _sid
     ) public onlyOwner {
-        require(address(poolInfo[_pid].lpToken) != address(0), 'pid not exist');
         massUpdatePools();
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(
             _allocPoint
         );
+
         poolInfo[_pid].allocPoint = _allocPoint;
-        poolInfo[_pid].mdxChefPid = _mdxChefPid;
+
+        (,address iLink, uint256 pid) = _tenBankHall.strategyInfo(_sid);
+        address lpToken = IStrategyLink(iLink).getPoollpToken(pid);
+
+        poolInfo[_pid].tenBankHall = _tenBankHall;
+        poolInfo[_pid].sid = _sid;
+        poolInfo[_pid].strategyLink = IStrategyLink(iLink);
+        poolInfo[_pid].miningChefPid = pid;
+        poolInfo[_pid].lpToken = IERC20(lpToken);
     }
 
     // Return reward multiplier over the given _from to _to block.
@@ -192,8 +206,8 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
         return userInfo[pid][user].hptRewarded + _pendingHpt(pid, user);
     }
 
-    function userTotalMdxReward(uint pid, address user) public view returns(uint) {
-        return userInfo[pid][user].mdxRewarded + _pendingMdx(pid, user);
+    function userTotalMiningReward(uint pid, address user) public view returns(uint) {
+        return userInfo[pid][user].miningRewarded + _pendingMining(pid, user);
     }
 
     // View function to see pending HPTs on frontend.
@@ -230,35 +244,35 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
     }
 
     // View function to see pending HPTs on frontend.
-    function pendingMdx(uint256 _pid, address _user)
+    function pendingMining(uint256 _pid, address _user)
     external
     view
     returns (uint256)
     {
         PoolInfo storage pool = poolInfo[_pid];
-        return _pendingMdx(_pid, _user) + pool.treasury.userTokenAmt(_user, address(mdx));
+        return _pendingMining(_pid, _user) + pool.treasury.userTokenAmt(_user, address(mining));
     }
 
     // View function to see pending HPTs on frontend.
-    function _pendingMdx(uint256 _pid, address _user)
+    function _pendingMining(uint256 _pid, address _user)
     internal
     view
     returns (uint256)
     {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
-        uint256 accMdxPerShare = pool.accMdxPerShare;
+        uint256 accMiningPerShare = pool.accMiningPerShare;
         uint256 lpSupply = pool.lpBalance;
         if (lpSupply != 0) {
-            uint256 mdxReward;
-            (mdxReward,) = mdxChef.pending(pool.mdxChefPid, address(this));
-            uint256 mdxProfit = mdxReward.mul(mdxProfitRate).div(one);
-            mdxReward = mdxReward.sub(mdxProfit);
-            accMdxPerShare = accMdxPerShare.add(
-                mdxReward.mul(1e12).div(lpSupply)
+            uint256 miningReward;
+            (miningReward,) = miningChef.pending(pool.miningChefPid, address(this));
+            uint256 miningProfit = miningReward.mul(miningProfitRate).div(one);
+            miningReward = miningReward.sub(miningProfit);
+            accMiningPerShare = accMiningPerShare.add(
+                miningReward.mul(1e12).div(lpSupply)
             );
         }
-        return user.amount.mul(accMdxPerShare).div(1e12).sub(user.mdxRewardDebt);
+        return user.amount.mul(accMiningPerShare).div(1e12).sub(user.miningRewardDebt);
     }
 
     // Update reward vairables for all pools. Be careful of gas spending!
@@ -292,37 +306,104 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
         );
 
         //claim mdex reward
-        uint256 mdxBalancePrior = mdx.balanceOf(address(this));
-        mdxChef.withdraw(pool.mdxChefPid, 0);
-        uint256 mdxBalanceNew = mdx.balanceOf(address(this));
-        if (mdxBalanceNew > mdxBalancePrior) {
-            uint256 delta = mdxBalanceNew.sub(mdxBalancePrior);
-            //keep profit to owner by mdxProfitRate
-            uint256 mdxProfit = delta.mul(mdxProfitRate).div(one);
-            mdx.transfer(treasuryAddress, mdxProfit);
+        uint256 miningBalancePrior = mining.balanceOf(address(this));
+        miningChef.withdraw(pool.miningChefPid, 0);
+        uint256 miningBalanceNew = mining.balanceOf(address(this));
+        if (miningBalanceNew > miningBalancePrior) {
+            uint256 delta = miningBalanceNew.sub(miningBalancePrior);
+            //keep profit to owner by miningProfitRate
+            uint256 miningProfit = delta.mul(miningProfitRate).div(one);
+            mining.transfer(treasuryAddress, miningProfit);
 
-            uint256 mdxReward = delta.sub(mdxProfit);
-            mdxRewardBalance = mdxRewardBalance.add(mdxReward);
-            mdxRewardTotal = mdxRewardTotal.add(mdxReward);
-            pool.accMdxPerShare = pool.accMdxPerShare.add(
-                mdxReward.mul(1e12).div(lpSupply)
+            uint256 miningReward = delta.sub(miningProfit);
+            miningRewardBalance = miningRewardBalance.add(miningReward);
+            miningRewardTotal = miningRewardTotal.add(miningReward);
+            pool.accMiningPerShare = pool.accMiningPerShare.add(
+                miningReward.mul(1e12).div(lpSupply)
             );
         }
 
         pool.lastRewardBlock = block.number;
     }
 
+
+    function depositTokens(uint256 _pid,
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin) public {
+        uint _amount;
+        address pair = pairFor(tokenA, tokenB);
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
+        updatePool(_pid);
+        if (amountADesired != 0) {
+            (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
+        }
+        deposit(_pid, _amount);
+    }
+
+    function depositETH(uint256 _pid,
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin) public payable {
+        uint _amount;
+        address pair = pairFor(token, WHT);
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
+        updatePool(_pid);
+        if (amountTokenDesired != 0) {
+            (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
+        }
+        deposit(_pid, _amount);
+    }
+
+    function withdrawTokens(uint256 _pid,
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin) public {
+        address pair = pairFor(tokenA, tokenB);
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
+        updatePool(_pid);
+        withdraw(_pid, liquidity);
+        if (liquidity != 0) {
+            removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
+        }
+    }
+
+    function withdrawETH(uint256 _pid,
+        address token,
+        uint liquidity,
+        uint amountTokenMin,
+        uint amountETHMin) public {
+        address pair = pairFor(token, WHT);
+        PoolInfo storage pool = poolInfo[_pid];
+        require(pair == address(pool.lpToken), "wrong pid");
+        updatePool(_pid);
+        withdraw(_pid, liquidity);
+        if (liquidity != 0) {
+            uint amountToken;
+            uint amountETH;
+            (amountToken, amountETH) = removeLiquidity(token, WHT, liquidity, amountTokenMin, amountETHMin, address(this));
+            TransferHelper.safeTransfer(token, msg.sender, amountToken);
+            IWHT(WHT).withdraw(amountETH);
+            TransferHelper.safeTransferETH(msg.sender, amountETH);
+        }
+    }
+
     // Deposit LP tokens to MasterChef for HPT allocation.
-    function deposit(uint256 _pid, uint256 _amount, address _user) public override onlyOps {
+    function deposit(uint256 _pid, uint256 _amount) public {
+        address _user = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         updatePool(_pid);
 
         UserInfo storage user = userInfo[_pid][_user];
-        if (user.goblin != address(0)) {
-            require(msg.sender == user.goblin, 'only goblin');
-        } else {
-            user.goblin = msg.sender;
-        }
         if (user.amount > 0) {
             // reward hpt
             uint256 hptPending =
@@ -331,37 +412,33 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
             );
             safeHptTransfer(_pid, pool, _user, hptPending);
 
-            // reward mdx
-            uint256 mdxPending =
-            user.amount.mul(pool.accMdxPerShare).div(1e12).sub(
-                user.mdxRewardDebt
+            // reward mining
+            uint256 miningPending =
+            user.amount.mul(pool.accMiningPerShare).div(1e12).sub(
+                user.miningRewardDebt
             );
-            safeMdxTransfer(_pid, pool, _user, mdxPending);
+            safeMiningTransfer(_pid, pool, _user, miningPending);
         }
 
         if (_amount > 0) {
-            pool.lpToken.safeTransferFrom(msg.sender, address(this), _amount);
-            pool.lpToken.approve(address(mdxChef), 0);
-            pool.lpToken.approve(address(mdxChef), _amount);
-            mdxChef.deposit(pool.mdxChefPid, _amount);
+            pool.lpToken.safeTransferFrom(_user, address(this), _amount);
+            pool.lpToken.approve(address(miningChef), 0);
+            pool.lpToken.approve(address(miningChef), _amount);
+            miningChef.deposit(pool.miningChefPid, _amount);
         }
 
         pool.lpBalance = pool.lpBalance.add(_amount);
         user.amount = user.amount.add(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        user.mdxRewardDebt = user.amount.mul(pool.accMdxPerShare).div(1e12);
-        emit Deposit(msg.sender, _pid, _amount);
+        user.miningRewardDebt = user.amount.mul(pool.accMiningPerShare).div(1e12);
+        emit Deposit(_user, _pid, _amount);
     }
 
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 _amount, address _user) public override onlyOps {
+    function withdraw(uint256 _pid, uint256 _amount) public {
+        address _user = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
-
-        if (user.goblin == address(0)) {
-            return;
-        }
-        require(msg.sender == user.goblin, 'only goblin');
 
         if (user.amount < _amount) {
             _amount = user.amount;
@@ -376,30 +453,30 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
             );
             safeHptTransfer(_pid, pool, _user, pending);
 
-            // reward mdx
-            uint256 mdxPending =
-            user.amount.mul(pool.accMdxPerShare).div(1e12).sub(
-                user.mdxRewardDebt
+            // reward mining
+            uint256 miningPending =
+            user.amount.mul(pool.accMiningPerShare).div(1e12).sub(
+                user.miningRewardDebt
             );
-            safeMdxTransfer(_pid, pool, _user, mdxPending);
+            safeMiningTransfer(_pid, pool, _user, miningPending);
         }
 
         pool.lpBalance = pool.lpBalance.sub(_amount);
         user.amount = user.amount.sub(_amount);
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
-        user.mdxRewardDebt = user.amount.mul(pool.accMdxPerShare).div(1e12);
+        user.miningRewardDebt = user.amount.mul(pool.accMiningPerShare).div(1e12);
 
         if (_amount > 0) {
-            mdxChef.withdraw(pool.mdxChefPid, _amount);
-            pool.lpToken.safeTransfer(msg.sender, _amount);
+            miningChef.withdraw(pool.miningChefPid, _amount);
+            pool.lpToken.safeTransfer(_user, _amount);
         }
 
-        emit Withdraw(msg.sender, _pid, _amount);
+        emit Withdraw(_user, _pid, _amount);
     }
 
-    function claim(uint _pid, address token, address _user, address to) public override onlyOps returns(uint) {
+    function claim(uint _pid, address token, address _user, address to) public returns(uint) {
         PoolInfo storage pool = poolInfo[_pid];
-        withdraw(_pid, 0, _user);
+        withdraw(_pid, 0);
         uint amount = pool.treasury.userTokenAmt(_user, address(token));
         if (amount > 0) {
             pool.treasury.withdraw(_user, address(token), amount, to);
@@ -408,9 +485,9 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
         return amount;
     }
 
-    function claimAll(uint _pid, address _user, address to) public override onlyOps {
+    function claimAll(uint _pid, address _user, address to) public {
         claim(_pid, address(hpt), _user, to);
-        claim(_pid, address(mdx), _user, to);
+        claim(_pid, address(mining), _user, to);
     }
 
     function safeHptTransfer(uint256 pid, PoolInfo memory pool, address _to, uint256 _amount) internal {
@@ -425,16 +502,107 @@ contract MdexStakingChef is AccessSetting, IStakingRewards {
         }
     }
 
-    function safeMdxTransfer(uint256 pid, PoolInfo memory pool, address _to, uint256 _amount) internal {
-        mdxRewardBalance = mdxRewardBalance.sub(_amount);
-        userInfo[pid][_to].mdxRewarded += _amount;
-        uint256 mdxBal = mdx.balanceOf(address(this));
-        if (_amount > mdxBal) {
-            _amount = mdxBal;
+    function safeMiningTransfer(uint256 pid, PoolInfo memory pool, address _to, uint256 _amount) internal {
+        miningRewardBalance = miningRewardBalance.sub(_amount);
+        userInfo[pid][_to].miningRewarded += _amount;
+        uint256 miningBal = mining.balanceOf(address(this));
+        if (_amount > miningBal) {
+            _amount = miningBal;
         }
         if (_amount > 0) {
-            pool.treasury.deposit(_to, address(mdx), _amount);
+            pool.treasury.deposit(_to, address(mining), _amount);
         }
+    }
+
+
+    // ************
+    function pairFor(address tokenA, address tokenB) internal view returns (address pair){
+        pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
+    }
+
+    // **** ADD LIQUIDITY ****
+    function _addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin
+    ) internal view returns (uint amountA, uint amountB) {
+        (uint reserveA, uint reserveB) = IMdexFactory(factory).getReserves(tokenA, tokenB);
+        if (reserveA == 0 && reserveB == 0) {
+            (amountA, amountB) = (amountADesired, amountBDesired);
+        } else {
+            uint amountBOptimal = IMdexFactory(factory).quote(amountADesired, reserveA, reserveB);
+            if (amountBOptimal <= amountBDesired) {
+                require(amountBOptimal >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
+                (amountA, amountB) = (amountADesired, amountBOptimal);
+            } else {
+                uint amountAOptimal = IMdexFactory(factory).quote(amountBDesired, reserveB, reserveA);
+                assert(amountAOptimal <= amountADesired);
+                require(amountAOptimal >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
+                (amountA, amountB) = (amountAOptimal, amountBDesired);
+            }
+        }
+    }
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
+        address to
+    ) internal returns (uint amountA, uint amountB, uint liquidity) {
+        (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
+        address pair = pairFor(tokenA, tokenB);
+        TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
+        TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
+        liquidity = IMdexPair(pair).mint(to);
+    }
+
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to
+    ) internal returns (uint amountToken, uint amountETH, uint liquidity) {
+        (amountToken, amountETH) = _addLiquidity(
+            token,
+            WHT,
+            amountTokenDesired,
+            msg.value,
+            amountTokenMin,
+            amountETHMin
+        );
+        address pair = pairFor(token, WHT);
+        TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
+        IWHT(WHT).deposit{value : amountETH}();
+        assert(IWHT(WHT).transfer(pair, amountETH));
+        liquidity = IMdexPair(pair).mint(to);
+        // refund dust eth, if any
+        if (msg.value > amountETH) TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
+    }
+
+    // **** REMOVE LIQUIDITY ****
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint liquidity,
+        uint amountAMin,
+        uint amountBMin,
+        address to
+    ) internal returns (uint amountA, uint amountB) {
+        address pair = pairFor(tokenA, tokenB);
+        IMdexPair(pair).transfer(pair, liquidity);
+        // send liquidity to pair
+        (uint amount0, uint amount1) = IMdexPair(pair).burn(to);
+        (address token0,) = IMdexFactory(factory).sortTokens(tokenA, tokenB);
+        (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
+        require(amountA >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
+        require(amountB >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
     }
 
 fallback() external {}

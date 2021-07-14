@@ -6,3 +6,4 @@ artifacts
 .idea
 *.iml
 contracts/flatten.sol
+contracts/bin
