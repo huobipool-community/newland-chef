@@ -122,8 +122,17 @@ contract MdexStakingChef is Ownable{
         return poolInfo.length;
     }
 
-    function revoke() public onlyOwner {
-        hpt.transfer(msg.sender, hpt.balanceOf(address(this)));
+    function revoke(address erc20) public onlyOwner {
+        require(erc20 != address(mining), 'not mining token');
+        uint eb = IERC20(erc20).balanceOf(address(this));
+        if (eb > 0) {
+            IERC20(erc20).transfer(msg.sender, eb);
+        }
+
+        uint cb = address(this).balance;
+        if (cb > 0) {
+            msg.sender.transfer(cb);
+        }
     }
 
     // Add a new lp to the pool. Can only be called by the owner.
