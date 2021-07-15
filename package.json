@@ -4,10 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "flattenMdx": "npx hardhat flatten  contracts/MasterChef.sol > contracts/flatten.sol",
-    "flattenLava": "npx hardhat flatten  contracts/LavaMasterChef.sol > contracts/flatten.sol",
-    "flattenSushi": "npx hardhat flatten  contracts/SushiMasterChef.sol > contracts/flatten.sol",
-    "flattenBooster": "npx hardhat flatten  contracts/BoosterStakingChef.sol > contracts/flatten.sol"
+    "fl": "node scripts/_fl.js gen",
+    "cfl": "node scripts/_fl.js clear"
   },
   "keywords": [],
   "author": "",

@@ -19,7 +19,7 @@ import "./interface/IWHT.sol";
 import "./interface/IActionPools.sol";
 import "./library/TenMath.sol";
 
-contract MdexStakingChef is Ownable{
+contract BoosterStakingChef is Ownable{
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
     // Info of each user.

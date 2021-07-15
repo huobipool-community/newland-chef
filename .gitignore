@@ -7,3 +7,4 @@ artifacts
 *.iml
 contracts/flatten.sol
 contracts/bin
+**/*_fl.sol
