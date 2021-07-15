@@ -21,18 +21,21 @@ run(async () => {
     }
     let results = await ethBatchQuery(queryItems, web3)
     queryItems = []
-    let pools = results.filter(item => item.isListed).map(item => {
+    let pools = []
+    for (let i = 0; i < results.length; i++) {
+        let item = results[i]
         queryItems.push({
             address: item.iLink,
             abi: strategyAbi,
             name: 'getPoolInfo',
             params: [item.pid]
         })
-        return {
+        pools.push({
+            sid: i,
             iLink: item.iLink,
             pid: item.pid.toString()
-        }
-    })
+        })
+    }
 
     results = await ethBatchQuery(queryItems, web3)
     queryItems = []
@@ -42,7 +45,7 @@ run(async () => {
         let baseTokenSymbol = (await tokenMap(result.baseToken, web3)).symbol
         pool.baseToken = `[${baseTokenSymbol}] ${result.baseToken}`
         pool.lpToken = result.lpToken
-        pool.mdexPid = result.poolId.toString()
+        pool.dexPid = result.poolId.toString()
 
         queryItems.push({
             address: pool.lpToken,
@@ -54,14 +57,19 @@ run(async () => {
             abi: pairAbi,
             name: 'token1'
         })
+        queryItems.push({
+            address: pool.lpToken,
+            abi: pairAbi,
+            name: 'name'
+        })
     }
 
     results = await ethBatchQuery(queryItems, web3)
     for (let i = 0; i < pools.length; i++) {
         let pool = pools[i]
-        pool.token0 = results[i * 2][0]
-        pool.token1 = results[i * 2 + 1][0]
-
+        pool.token0 = results[i * 3][0]
+        pool.token1 = results[i * 3 + 1][0]
+        let name = results[i * 3 + 2][0]
         let token0Symbol = (await tokenMap(pool.token0, web3)).symbol
         let token1Symbol = (await tokenMap(pool.token1, web3)).symbol
 
@@ -69,6 +77,7 @@ run(async () => {
         pool.token1 = `[${token1Symbol}] ${pool.token1}`
         let pairKey = `${token0Symbol}-${token1Symbol}`
         pool.lpToken = `[${pairKey}] ${pool.lpToken}`
+        pool.dexPid = `[${name}] ${pool.dexPid}`
     }
     console.table(pools)
 })
