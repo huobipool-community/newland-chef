@@ -53,6 +53,7 @@ async function deploy(name, ...args) {
     }
 
     loggerObj(name, contract)
+    contract.$connect = signer => loggerObj(name, contract.connect(signer));
     return contract
 }
 

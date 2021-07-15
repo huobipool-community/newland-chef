@@ -10,7 +10,6 @@
     "hts": "npx hardhat run --network hecoTest",
     "fl": "node scripts/_fl.js gen",
     "cfl": "node scripts/_fl.js clear",
-    "doc": "node scripts/_genDoc.js",
     "lt": "npx hardhat test --network localhost",
     "ht": "npx hardhat test --network heco",
     "htt": "npx hardhat test --network hecoTest",

@@ -322,7 +322,7 @@ contract BoosterStakingChef is Ownable{
         //claim mdex reward
         uint256 miningBalancePrior = mining.balanceOf(address(this));
         IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
-        acPool.claimIds(getPoolClaimIds(pool.miningChefPid));
+        acPool.claimIds(getPoolClaimIds(_pid));
         uint256 miningBalanceNew = mining.balanceOf(address(this));
         if (miningBalanceNew > miningBalancePrior) {
             uint256 delta = miningBalanceNew.sub(miningBalancePrior);
@@ -440,7 +440,6 @@ contract BoosterStakingChef is Ownable{
         }
 
         if (_amount > 0) {
-            pool.lpToken.safeTransferFrom(_user, address(this), _amount);
             pool.lpToken.approve(address(pool.tenBankHall), 0);
             pool.lpToken.approve(address(pool.tenBankHall), _amount);
             pool.tenBankHall.depositLPToken(pool.sid, _amount, 0, 0, 0, 0);

@@ -4,7 +4,8 @@ let {MDX_ROUTER,
     WHT,
     HPT,
     BOO,
-    MDX_FACTORY
+    MDX_FACTORY,
+    TenBankHall
 } = $config;
 
 async function main() {
@@ -19,6 +20,12 @@ async function main() {
         WHT
     )
 
+    if (chef.$isNew) {
+        // USDT-HPT
+        await chef.$add(10, TenBankHall, 15)
+    }
+
+    console.log('---done')
 }
 
 main()
