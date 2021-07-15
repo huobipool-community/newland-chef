@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 library TenMath {
   using SafeMath for uint256;
 
-  function min(uint256 v1, uint256 v2) public pure returns (uint256 vr) {
+  function min(uint256 v1, uint256 v2) internal pure returns (uint256 vr) {
     vr = v1 > v2 ? v2 : v1; 
   }
     

@@ -1,4 +1,4 @@
-let {e} = require('jsir')
+const exec = require('child_process').exec;
 let fs = require('fs')
 let solHome = process.cwd() + "/contracts";
 
@@ -48,4 +48,16 @@ function wrapper(flPath) {
     }
     fs.writeFileSync(flPath, text)
 }
+
+async function e(cmd, mbNum){
+    return new Promise((resolve, reject) => {
+        exec(`${cmd}`, {
+                maxBuffer: 1024 * 1024 * (mbNum || 3) //quick fix
+            },
+            function (err, stdout, stderr) {
+                resolve(stdout ? String(stdout).trim():'')
+            });
+    })
+}
+
 

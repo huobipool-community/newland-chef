@@ -7,17 +7,18 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+
 import "./interface/IMdexChef.sol";
-import "./library/TransferHelper.sol";
-import "./Treasury.sol";
 import './interface/IStrategyLink.sol';
 import './interface/ITenBankHall.sol';
-
 import "./interface/IMdexFactory.sol";
 import "./interface/IMdexPair.sol";
 import "./interface/IWHT.sol";
 import "./interface/IActionPools.sol";
+
 import "./library/TenMath.sol";
+import "./library/TransferHelper.sol";
+import "./Treasury.sol";
 
 contract BoosterStakingChef is Ownable{
     using SafeMath for uint256;
@@ -66,7 +67,6 @@ contract BoosterStakingChef is Ownable{
     uint256 public miningRewardTotal;
     uint256 public miningProfitRate;
     IERC20 public mining;
-    uint256 one = 1e18;
     address public treasuryAddress;
     address public factory;
     address public WHT;
@@ -280,7 +280,7 @@ contract BoosterStakingChef is Ownable{
                 miningReward += acPool.pendingRewards(ids[i], address(this));
             }
 
-            uint256 miningProfit = miningReward.mul(miningProfitRate).div(one);
+            uint256 miningProfit = miningReward.mul(miningProfitRate).div(1e18);
             miningReward = miningReward.sub(miningProfit);
             accMiningPerShare = accMiningPerShare.add(
                 miningReward.mul(1e12).div(lpSupply)
@@ -327,7 +327,7 @@ contract BoosterStakingChef is Ownable{
         if (miningBalanceNew > miningBalancePrior) {
             uint256 delta = miningBalanceNew.sub(miningBalancePrior);
             //keep profit to owner by miningProfitRate
-            uint256 miningProfit = delta.mul(miningProfitRate).div(one);
+            uint256 miningProfit = delta.mul(miningProfitRate).div(1e18);
             mining.transfer(treasuryAddress, miningProfit);
 
             uint256 miningReward = delta.sub(miningProfit);
