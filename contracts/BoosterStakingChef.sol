@@ -31,20 +31,21 @@ contract BoosterStakingChef is Ownable{
         uint256 miningRewarded;  //accumlated total
         uint256 lpPoints;       // deposit proportion
     }
+
     // Info of each pool.
     struct PoolInfo {
-        ITenBankHall tenBankHall;
-        uint sid;
-        IStrategyLink strategyLink;
+        IERC20 lpToken;    //Address of LP token contract.
         uint256 allocPoint; // How many allocation points assigned to this pool. HPTs to distribute per block.
         uint256 lastRewardBlock; // Last block number that HPTs distribution occurs.
         uint256 accHptPerShare; // Accumulated HPTs per share, times 1e12. See below.
         uint256 miningChefPid;
-        IERC20 lpToken;
         uint256 lpBalance;
         uint256 accMiningPerShare;
         uint256 totalLPReinvest;        // total of lptoken amount with totalLPAmount and reinvest rewards，
         uint256 totalPoints;
+        ITenBankHall tenBankHall;
+        IStrategyLink strategyLink;
+        uint sid;
     }
 
     // The HPT TOKEN!
