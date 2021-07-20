@@ -18,6 +18,7 @@ if ($keys.length > 0) {
     balance: '1000000000000000000000'
   }]
 }
+let gasPrice = 2.3 * 1000000000
 
 module.exports = {
   solidity: {
@@ -36,19 +37,19 @@ module.exports = {
       },
       accounts: hardhatAccounts,
       blockGasLimit: 900000000000000,
-      gasPrice: 1.8 * 1000000000,
+      gasPrice,
       allowUnlimitedContractSize: true
     },
     heco: {
       url: "https://http-mainnet-node.huobichain.com",
       accounts: $keys,
-      gasPrice: 1.8 * 1000000000,
+      gasPrice,
       allowUnlimitedContractSize: true
     },
     hecoTest: {
       url: "https://http-testnet.hecochain.com",
       accounts: $keys,
-      gasPrice: 1.8 * 1000000000,
+      gasPrice,
       allowUnlimitedContractSize: true
     }
   },

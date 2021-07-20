@@ -22,7 +22,7 @@ async function main() {
 
     if (chef.$isNew) {
         // USDT-HPT
-        await chef.$add(10, TenBankHall, 15)
+        await chef.$add(10, TenBankHall, 43)
     }
 
     console.log('---done')
