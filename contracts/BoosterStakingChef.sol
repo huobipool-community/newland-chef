@@ -298,7 +298,7 @@ contract BoosterStakingChef is Ownable{
             hptReward.mul(1e12).div(lpSupply)
         );
 
-        //claim mdex reward
+        //claim mining reward
         uint256 miningBalancePrior = mining.balanceOf(address(this));
         IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
         acPool.claimIds(getPoolClaimIds(_pid));
@@ -439,6 +439,7 @@ contract BoosterStakingChef is Ownable{
         address _user = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
+        updatePool(_pid);
 
         rate = rate > 1e9 ? 1e9:rate;
         uint256 removedPoint = user.lpPoints.mul(rate).div(1e9);
@@ -446,8 +447,6 @@ contract BoosterStakingChef is Ownable{
         withdrawLPTokenAmount = TenMath.min(withdrawLPTokenAmount, pool.totalLPReinvest);
         uint256 _amount = rate >= 1e9 ? user.amount : user.amount.mul(rate).div(1e9);
         uint withdrawRate = withdrawLPTokenAmount.div(pool.totalLPReinvest).mul(1e9);
-
-        updatePool(_pid);
 
         {
             // reward hpt
