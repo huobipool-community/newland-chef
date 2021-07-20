@@ -4,6 +4,18 @@ pragma solidity 0.6.12;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IActionPools {
+    function poolInfo(uint256 _pid) external view
+    returns (
+        address callFrom,
+        uint256 callId,
+        address  rewardToken,
+        uint256 rewardMaxPerBlock,
+        uint256 lastRewardBlock,
+        uint256 lastRewardClosed,
+        uint256 poolTotalRewards,
+        uint256 accRewardPerShare,
+        bool autoUpdate,
+        bool autoClaim);
 
     function getPoolInfo(uint256 _pid) external view 
         returns (address callFrom, uint256 callId, address rewardToken);

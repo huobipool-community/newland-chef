@@ -46,6 +46,7 @@ contract BoosterStakingChef is Ownable{
         ITenBankHall tenBankHall;
         IStrategyLink strategyLink;
         uint sid;
+        uint mdxPid;
     }
 
     // The HPT TOKEN!
@@ -108,6 +109,26 @@ contract BoosterStakingChef is Ownable{
         hptPerBlock = _hptPerBlock;
     }
 
+    function miningRewardPerBlock(uint256 _pid) external view returns(uint256) {
+        PoolInfo storage pool = poolInfo[_pid];
+
+        IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
+        uint[] memory ids = getPoolClaimIds(pool.miningChefPid);
+        uint rewardPerBlock = 0;
+        for(uint i = 0; i< ids.length; i++) {
+            (,, address rewardToken, uint _rewardPerBlock,,,,,,) = acPool.poolInfo(ids[i]);
+            if (rewardToken == address(mining)) {
+                rewardPerBlock += _rewardPerBlock;
+            }
+        }
+
+        (,,,, uint256 totalLPAmount,) = pool.strategyLink.getPoolInfo(pool.miningChefPid);
+        rewardPerBlock = rewardPerBlock.mul(pool.lpBalance).div(totalLPAmount);
+        uint baseVal = 1e18;
+        rewardPerBlock = rewardPerBlock.mul(baseVal.sub(miningProfitRate)).div(baseVal);
+        return rewardPerBlock;
+    }
+
     function hptRewardPerBlock(uint _pid) external view returns(uint)  {
         PoolInfo storage pool = poolInfo[_pid];
         return hptPerBlock.mul(pool.allocPoint).div(totalAllocPoint);
@@ -147,8 +168,8 @@ contract BoosterStakingChef is Ownable{
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
 
         (,address iLink, uint256 pid) = _tenBankHall.strategyInfo(_sid);
+        (, , address lpToken, uint256 poolId,,) = IStrategyLink(iLink).getPoolInfo(pid);
 
-        address lpToken = IStrategyLink(iLink).getPoollpToken(pid);
         poolInfo.push(
             PoolInfo({
             tenBankHall: _tenBankHall,
@@ -162,7 +183,8 @@ contract BoosterStakingChef is Ownable{
             lpBalance: 0,
             accMiningPerShare: 0,
             totalPoints: 0,
-            totalLPReinvest: 0
+            totalLPReinvest: 0,
+            mdxPid: poolId
             })
         );
     }
@@ -182,13 +204,14 @@ contract BoosterStakingChef is Ownable{
         poolInfo[_pid].allocPoint = _allocPoint;
 
         (,address iLink, uint256 pid) = _tenBankHall.strategyInfo(_sid);
-        address lpToken = IStrategyLink(iLink).getPoollpToken(pid);
+        (, , address lpToken, uint256 poolId,,) = IStrategyLink(iLink).getPoolInfo(pid);
 
         poolInfo[_pid].tenBankHall = _tenBankHall;
         poolInfo[_pid].sid = _sid;
         poolInfo[_pid].strategyLink = IStrategyLink(iLink);
         poolInfo[_pid].miningChefPid = pid;
         poolInfo[_pid].lpToken = IERC20(lpToken);
+        poolInfo[_pid].mdxPid = poolId;
     }
 
     // get booster actionPool ids
