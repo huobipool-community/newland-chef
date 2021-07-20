@@ -253,7 +253,10 @@ contract BoosterStakingChef is Ownable{
             IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
             uint[] memory ids = getPoolClaimIds(pool.miningChefPid);
             for(uint i = 0; i< ids.length; i++) {
-                miningReward += acPool.pendingRewards(ids[i], address(this));
+                (,, address rewardToken) = acPool.getPoolInfo(ids[i]);
+                if (rewardToken == address(mining)) {
+                    miningReward += acPool.pendingRewards(ids[i], address(this));
+                }
             }
 
             uint256 miningProfit = miningReward.mul(miningProfitRate).div(1e18);
