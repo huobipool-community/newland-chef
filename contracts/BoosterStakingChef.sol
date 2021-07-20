@@ -18,7 +18,6 @@ import "./interface/IActionPools.sol";
 
 import "./library/TenMath.sol";
 import "./library/TransferHelper.sol";
-import "./Treasury.sol";
 
 contract BoosterStakingChef is Ownable{
     using SafeMath for uint256;
@@ -44,7 +43,6 @@ contract BoosterStakingChef is Ownable{
         IERC20 lpToken;
         uint256 lpBalance;
         uint256 accMiningPerShare;
-        Treasury treasury;
         uint256 totalLPReinvest;        // total of lptoken amount with totalLPAmount and reinvest rewards，
         uint256 totalPoints;
     }
@@ -59,13 +57,14 @@ contract BoosterStakingChef is Ownable{
     mapping(uint256 => mapping(address => UserInfo)) public userInfo;
     // Total allocation poitns. Must be the sum of all allocation points in all pools.
     uint256 public totalAllocPoint = 0;
-    // The block number when HPT mining starts.
+    // The block number when reward mining starts.
     uint256 public startBlock;
     uint256 public hptRewardBalance;
     uint256 public miningRewardBalance;
     uint256 public hptRewardTotal;
     uint256 public miningRewardTotal;
     uint256 public miningProfitRate;
+    // The reward token
     IERC20 public mining;
     address public treasuryAddress;
     address public factory;
@@ -145,9 +144,6 @@ contract BoosterStakingChef is Ownable{
         uint256 lastRewardBlock =
         block.number > startBlock ? block.number : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
-        Treasury treasury= new Treasury();
-        mining.approve(address(treasury), uint256(-1));
-        hpt.approve(address(treasury), uint256(-1));
 
         (,address iLink, uint256 pid) = _tenBankHall.strategyInfo(_sid);
 
@@ -164,14 +160,13 @@ contract BoosterStakingChef is Ownable{
             accHptPerShare: 0,
             lpBalance: 0,
             accMiningPerShare: 0,
-            treasury: treasury,
             totalPoints: 0,
             totalLPReinvest: 0
             })
         );
     }
 
-    // Update the given pool's HPT allocation point. Can only be called by the owner.
+    // Update the given pool's reward allocation point. Can only be called by the owner.
     function set(
         uint256 _pid,
         uint256 _allocPoint,
@@ -195,6 +190,7 @@ contract BoosterStakingChef is Ownable{
         poolInfo[_pid].lpToken = IERC20(lpToken);
     }
 
+    // get booster actionPool ids
     function getPoolClaimIds(uint pid) internal view returns(uint[] memory) {
         PoolInfo storage pool = poolInfo[pid];
         IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
@@ -212,25 +208,15 @@ contract BoosterStakingChef is Ownable{
     }
 
     function userTotalHptReward(uint pid, address user) public view returns(uint) {
-        return userInfo[pid][user].hptRewarded + _pendingHpt(pid, user);
+        return userInfo[pid][user].hptRewarded + pendingHpt(pid, user);
     }
 
     function userTotalMiningReward(uint pid, address user) public view returns(uint) {
-        return userInfo[pid][user].miningRewarded + _pendingMining(pid, user);
+        return userInfo[pid][user].miningRewarded + pendingMining(pid, user);
     }
 
-    // View function to see pending HPTs on frontend.
     function pendingHpt(uint256 _pid, address _user)
-    external
-    view
-    returns (uint256)
-    {
-        PoolInfo storage pool = poolInfo[_pid];
-        return _pendingHpt(_pid, _user) + pool.treasury.userTokenAmt(_user, address(hpt));
-    }
-
-    function _pendingHpt(uint256 _pid, address _user)
-    internal
+    public
     view
     returns (uint256)
     {
@@ -252,19 +238,9 @@ contract BoosterStakingChef is Ownable{
         return user.amount.mul(accHptPerShare).div(1e12).sub(user.rewardDebt);
     }
 
-    // View function to see pending HPTs on frontend.
+    // View function to see pending reward on frontend.
     function pendingMining(uint256 _pid, address _user)
-    external
-    view
-    returns (uint256)
-    {
-        PoolInfo storage pool = poolInfo[_pid];
-        return _pendingMining(_pid, _user) + pool.treasury.userTokenAmt(_user, address(mining));
-    }
-
-    // View function to see pending HPTs on frontend.
-    function _pendingMining(uint256 _pid, address _user)
-    internal
+    public
     view
     returns (uint256)
     {
@@ -355,7 +331,6 @@ contract BoosterStakingChef is Ownable{
         address pair = pairFor(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        updatePool(_pid);
         if (amountADesired != 0) {
             (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
         }
@@ -371,7 +346,6 @@ contract BoosterStakingChef is Ownable{
         address pair = pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        updatePool(_pid);
         if (amountTokenDesired != 0) {
             (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
         }
@@ -387,7 +361,6 @@ contract BoosterStakingChef is Ownable{
         address pair = pairFor(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        updatePool(_pid);
         withdraw(_pid, rate);
         uint liquidity = pool.lpToken.balanceOf(address(this));
         if (liquidity != 0) {
@@ -403,7 +376,6 @@ contract BoosterStakingChef is Ownable{
         address pair = pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
-        updatePool(_pid);
         withdraw(_pid, rate);
         uint liquidity = pool.lpToken.balanceOf(address(this));
         if (liquidity != 0) {
@@ -416,8 +388,7 @@ contract BoosterStakingChef is Ownable{
         }
     }
 
-    // Deposit LP tokens to MasterChef for HPT allocation.
-    function deposit(uint256 _pid, uint256 _amount) public {
+    function deposit(uint256 _pid, uint256 _amount) internal {
         address _user = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         updatePool(_pid);
@@ -429,14 +400,14 @@ contract BoosterStakingChef is Ownable{
             user.amount.mul(pool.accHptPerShare).div(1e12).sub(
                 user.rewardDebt
             );
-            safeHptTransfer(_pid, pool, _user, hptPending);
+            safeHptTransfer(_pid, _user, hptPending);
 
             // reward mining
             uint256 miningPending =
             user.amount.mul(pool.accMiningPerShare).div(1e12).sub(
                 user.miningRewardDebt
             );
-            safeMiningTransfer(_pid, pool, _user, miningPending);
+            safeMiningTransfer(_pid, _user, miningPending);
         }
 
         if (_amount > 0) {
@@ -461,8 +432,7 @@ contract BoosterStakingChef is Ownable{
         emit Deposit(_user, _pid, _amount);
     }
 
-    // Withdraw LP tokens from MasterChef.
-    function withdraw(uint256 _pid, uint256 rate) public {
+    function withdraw(uint256 _pid, uint256 rate) internal {
         address _user = msg.sender;
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
@@ -482,19 +452,14 @@ contract BoosterStakingChef is Ownable{
             user.amount.mul(pool.accHptPerShare).div(1e12).sub(
                 user.rewardDebt
             );
-            safeHptTransfer(_pid, pool, _user, pending);
+            safeHptTransfer(_pid, _user, pending);
 
             // reward mining
             uint256 miningPending =
             user.amount.mul(pool.accMiningPerShare).div(1e12).sub(
                 user.miningRewardDebt
             );
-            safeMiningTransfer(_pid, pool, _user, miningPending);
-        }
-
-        uint256 addPoint = _amount;
-        if(pool.totalLPReinvest > 0) {
-            addPoint = _amount.mul(pool.totalPoints).div(pool.totalLPReinvest);
+            safeMiningTransfer(_pid, _user, miningPending);
         }
 
         pool.lpBalance = pool.lpBalance.sub(_amount);
@@ -506,27 +471,11 @@ contract BoosterStakingChef is Ownable{
         user.rewardDebt = user.amount.mul(pool.accHptPerShare).div(1e12);
         user.miningRewardDebt = user.amount.mul(pool.accMiningPerShare).div(1e12);
 
-        if (_amount > 0) {
+        if (withdrawRate > 0) {
             pool.tenBankHall.withdrawLPToken(pool.sid, withdrawRate, 0, 0);
         }
 
         emit Withdraw(_user, _pid, _amount);
-    }
-
-    function claim(uint _pid, address token, address _user, address to) public returns(uint) {
-        PoolInfo storage pool = poolInfo[_pid];
-        withdraw(_pid, 0);
-        uint amount = pool.treasury.userTokenAmt(_user, address(token));
-        if (amount > 0) {
-            pool.treasury.withdraw(_user, address(token), amount, to);
-            emit Claim(token, _user, to, amount);
-        }
-        return amount;
-    }
-
-    function claimAll(uint _pid, address _user, address to) public {
-        claim(_pid, address(hpt), _user, to);
-        claim(_pid, address(mining), _user, to);
     }
 
     function pendingLPAmount(uint256 _pid, address _account) public view returns (uint256 value) {
@@ -538,7 +487,7 @@ contract BoosterStakingChef is Ownable{
         value = TenMath.min(value, pool.totalLPReinvest);
     }
 
-    function safeHptTransfer(uint256 pid, PoolInfo memory pool, address _to, uint256 _amount) internal {
+    function safeHptTransfer(uint256 pid, address _to, uint256 _amount) internal {
         hptRewardBalance = hptRewardBalance.sub(_amount);
         userInfo[pid][_to].hptRewarded += _amount;
         uint256 hptBal = hpt.balanceOf(address(this));
@@ -546,11 +495,11 @@ contract BoosterStakingChef is Ownable{
             _amount = hptBal;
         }
         if (_amount > 0) {
-            pool.treasury.deposit(_to, address(hpt), _amount);
+            hpt.transfer(_to, _amount);
         }
     }
 
-    function safeMiningTransfer(uint256 pid, PoolInfo memory pool, address _to, uint256 _amount) internal {
+    function safeMiningTransfer(uint256 pid, address _to, uint256 _amount) internal {
         miningRewardBalance = miningRewardBalance.sub(_amount);
         userInfo[pid][_to].miningRewarded += _amount;
         uint256 miningBal = mining.balanceOf(address(this));
@@ -558,7 +507,7 @@ contract BoosterStakingChef is Ownable{
             _amount = miningBal;
         }
         if (_amount > 0) {
-            pool.treasury.deposit(_to, address(mining), _amount);
+            mining.transfer(_to, _amount);
         }
     }
 
