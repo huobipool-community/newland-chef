@@ -473,7 +473,6 @@ contract BoosterStakingChef is Ownable{
 
         pool.lpBalance = pool.lpBalance.add(_amount);
         pool.totalPoints = pool.totalPoints.add(addPoint);
-        pool.totalLPReinvest = pool.totalLPReinvest.add(_amount);
 
         user.lpPoints = user.lpPoints.add(addPoint);
         user.amount = user.amount.add(_amount);
@@ -513,7 +512,6 @@ contract BoosterStakingChef is Ownable{
 
         pool.lpBalance = pool.lpBalance.sub(_amount);
         pool.totalPoints = TenMath.safeSub(pool.totalPoints, removedPoint);
-        pool.totalLPReinvest = TenMath.safeSub(pool.totalLPReinvest, withdrawLPTokenAmount);
 
         user.lpPoints = TenMath.safeSub(user.lpPoints, removedPoint);
         user.amount = user.amount.sub(_amount);
