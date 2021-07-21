@@ -41,4 +41,6 @@ interface IStrategyLink {
 
     function liquidation(uint256 _pid, address _account, address _hunter, uint256 _maxDebt) external;
     function repayBorrow(uint256 _pid, address _account, uint256 _rate, bool _force) external;
+
+    function sconfig() external view returns(address);
 }

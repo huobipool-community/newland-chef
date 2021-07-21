@@ -12,6 +12,7 @@ module.exports = {
         HPT : '0xe499ef4616993730ced0f31fa2703b92b50bb536',
         BOO: '0xff96dccf2763d512b6038dc60b7e96d1a9142507',
         TenBankHall: '0xa61A4F9275eF62d2C076B0933F8A9418CeC8c670',
+        MDX_CHEF: '0xfb03e11d93632d97a8981158a632dd5986f5e909',
         address0,
     }
 }

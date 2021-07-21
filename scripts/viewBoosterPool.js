@@ -1,6 +1,6 @@
 let {run, ethQuery1, ethBatchQuery, tokenMap} = require('jsir')
 let Web3 = require('web3');
-let web3 = new Web3("https://http-mainnet.hecochain.com");
+let web3 = new Web3("https://http-mainnet-node.huobichain.com");
 require('console.table')
 
 let tenBankHall = '0xa61A4F9275eF62d2C076B0933F8A9418CeC8c670'

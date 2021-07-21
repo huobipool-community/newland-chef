@@ -15,6 +15,7 @@ import "./interface/IMdexFactory.sol";
 import "./interface/IMdexPair.sol";
 import "./interface/IWHT.sol";
 import "./interface/IActionPools.sol";
+import "./interface/IStrategyConfig.sol";
 
 import "./library/TenMath.sol";
 import "./library/TransferHelper.sol";
@@ -71,6 +72,7 @@ contract BoosterStakingChef is Ownable{
     address public treasuryAddress;
     address public factory;
     address public WHT;
+    IMdexChef public mdxChef;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -84,7 +86,8 @@ contract BoosterStakingChef is Ownable{
         IERC20 _mining,
         address _treasuryAddress,
         address _mdxFactory,
-        address _WHT
+        address _WHT,
+        IMdexChef _mdxChef
     ) public {
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
@@ -94,6 +97,7 @@ contract BoosterStakingChef is Ownable{
         treasuryAddress = _treasuryAddress;
         factory = _mdxFactory;
         WHT = _WHT;
+        mdxChef = _mdxChef;
     }
 
     function getRewardToken() external view returns(address) {
@@ -102,6 +106,19 @@ contract BoosterStakingChef is Ownable{
 
     function setTreasuryAddress(address _treasuryAddress) public onlyOwner {
         treasuryAddress = _treasuryAddress;
+    }
+
+    function getPoolData(uint _pid) public view returns(uint mdxPerBlock, uint mdxPoolTotalAmount, uint depositFee, uint withdrawFee, uint refundFee) {
+        PoolInfo storage pool = poolInfo[_pid];
+
+        IMdexChef.MdxPoolInfo memory mdxPoolInfo = mdxChef.poolInfo(pool.mdxPid);
+        IStrategyConfig config = IStrategyConfig(pool.strategyLink.sconfig());
+
+        mdxPerBlock = mdxChef.reward(block.number);
+        mdxPoolTotalAmount = mdxPoolInfo.totalAmount;
+        (,depositFee) = config.getDepositFee(address(pool.strategyLink), pool.miningChefPid);
+        (,withdrawFee) = config.getWithdrawFee(address(pool.strategyLink), pool.miningChefPid);
+        (,refundFee) = config.getRefundFee(address(pool.strategyLink), pool.miningChefPid);
     }
 
     function setHptPerBlock(uint _hptPerBlock) public onlyOwner {
@@ -222,15 +239,6 @@ contract BoosterStakingChef is Ownable{
         return acPool.getPoolIndex(address(pool.strategyLink), pool.miningChefPid);
     }
 
-    // Return reward multiplier over the given _from to _to block.
-    function getMultiplier(uint256 _from, uint256 _to)
-    internal
-    pure
-    returns (uint256)
-    {
-        return _to.sub(_from);
-    }
-
     function userTotalHptReward(uint pid, address user) public view returns(uint) {
         return userInfo[pid][user].hptRewarded + pendingHpt(pid, user);
     }
@@ -249,8 +257,7 @@ contract BoosterStakingChef is Ownable{
         uint256 accHptPerShare = pool.accHptPerShare;
         uint256 lpSupply = pool.lpBalance;
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 multiplier =
-            getMultiplier(pool.lastRewardBlock, block.number);
+            uint256 multiplier = block.number.sub(pool.lastRewardBlock);
             uint256 hptReward =
             multiplier.mul(hptPerBlock).mul(pool.allocPoint).div(
                 totalAllocPoint
@@ -311,7 +318,7 @@ contract BoosterStakingChef is Ownable{
             pool.lastRewardBlock = block.number;
             return;
         }
-        uint256 multiplier = getMultiplier(pool.lastRewardBlock, block.number);
+        uint256 multiplier = block.number.sub(pool.lastRewardBlock);
         uint256 hptReward =
         multiplier.mul(hptPerBlock).mul(pool.allocPoint).div(
             totalAllocPoint

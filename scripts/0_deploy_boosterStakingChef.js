@@ -5,7 +5,8 @@ let {MDX_ROUTER,
     HPT,
     BOO,
     MDX_FACTORY,
-    TenBankHall
+    TenBankHall,
+    MDX_CHEF
 } = $config;
 
 async function main() {
@@ -17,7 +18,8 @@ async function main() {
         BOO,
         '0x2f1178bd9596ab649014441dDB83c2f240B5527C',
         MDX_FACTORY,
-        WHT
+        WHT,
+        MDX_CHEF
     )
 
     if (chef.$isNew) {

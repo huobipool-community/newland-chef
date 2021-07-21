@@ -5,7 +5,8 @@ let {MDX_ROUTER,
     HPT,
     BOO,
     MDX_FACTORY,
-    TenBankHall
+    TenBankHall,
+    MDX_CHEF
 } = $config;
 let erc20Artifact = '@openzeppelin/contracts/token/ERC20/ERC20.sol:ERC20'
 
@@ -25,7 +26,8 @@ describe("BoosterStakingChef", function () {
             BOO,
             '0x2f1178bd9596ab649014441dDB83c2f240B5527C',
             MDX_FACTORY,
-            WHT
+            WHT,
+            MDX_CHEF
         )
 
         if (chef.$isNew) {
@@ -53,6 +55,9 @@ describe("BoosterStakingChef", function () {
         let strategyOwnerSigner = await ethers.provider.getSigner(strategyOwner);
         await strategyIns.connect(strategyOwnerSigner).setWhitelist(chef.address, true)
         console.log(await strategyIns.whitelist(chef.address))
+    })
+    it("info", async function () {
+        console.log(await chef.$getPoolData(0));
     })
     it("deposit", async function () {
         await chef.$connect(signer).$depositTokens(0, USDT, HPT, "3000000000000000000", "3000000000000000000", 0 ,0)
