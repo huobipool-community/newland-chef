@@ -130,7 +130,7 @@ contract BoosterStakingChef is Ownable{
         PoolInfo storage pool = poolInfo[_pid];
 
         IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
-        uint[] memory ids = getPoolClaimIds(pool.miningChefPid);
+        uint[] memory ids = getPoolClaimIds(_pid);
         uint rewardPerBlock = 0;
         for(uint i = 0; i< ids.length; i++) {
             (,, address rewardToken, uint _rewardPerBlock,,,,,,) = acPool.poolInfo(ids[i]);
@@ -247,6 +247,20 @@ contract BoosterStakingChef is Ownable{
         return userInfo[pid][user].miningRewarded + pendingMining(pid, user);
     }
 
+    function pending0(uint256 _pid, address _user)
+    public
+    view
+    returns (uint256) {
+        return pendingHpt(_pid, _user);
+    }
+
+    function pending1(uint256 _pid, address _user)
+    public
+    view
+    returns (uint256) {
+        return pendingMining(_pid, _user);
+    }
+
     function pendingHpt(uint256 _pid, address _user)
     public
     view
@@ -282,7 +296,7 @@ contract BoosterStakingChef is Ownable{
         if (lpSupply != 0) {
             uint256 miningReward;
             IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
-            uint[] memory ids = getPoolClaimIds(pool.miningChefPid);
+            uint[] memory ids = getPoolClaimIds(_pid);
             for(uint i = 0; i< ids.length; i++) {
                 (,, address rewardToken) = acPool.getPoolInfo(ids[i]);
                 if (rewardToken == address(mining)) {

@@ -61,6 +61,8 @@ describe("BoosterStakingChef", function () {
     })
     it("deposit", async function () {
         await chef.$connect(signer).$depositTokens(0, USDT, HPT, "3000000000000000000", "3000000000000000000", 0 ,0)
+        await chef.$pendingMining(0, signerAddress)
+        console.log((await chef.$poolInfo(0)).miningChefPid.toNumber())
     })
     it("withdraw", async function () {
         await chef.$connect(signer).$withdrawTokens(0, USDT, HPT, '1000000000', 0 ,0)
