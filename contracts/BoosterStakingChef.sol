@@ -343,6 +343,8 @@ contract BoosterStakingChef is Ownable{
             hptReward.mul(1e12).div(lpSupply)
         );
 
+        pool.strategyLink.updatePool(pool.miningChefPid, 0, 0);
+
         //claim mining reward
         uint256 miningBalancePrior = mining.balanceOf(address(this));
         IActionPools acPool = IActionPools(pool.strategyLink.compActionPool());
@@ -530,8 +532,11 @@ contract BoosterStakingChef is Ownable{
         if(pool.totalPoints <= 0) {
             return 0;
         }
-        value = userInfo[_pid][_account].lpPoints.mul(pool.totalLPReinvest).div(pool.totalPoints);
-        value = TenMath.min(value, pool.totalLPReinvest);
+        uint totalLPReinvest = pool.strategyLink.pendingLPAmount(pool.miningChefPid, address(this));
+        totalLPReinvest = totalLPReinvest >= pool.lpBalance ? totalLPReinvest:pool.lpBalance;
+
+        value = userInfo[_pid][_account].lpPoints.mul(totalLPReinvest).div(pool.totalPoints);
+        value = TenMath.min(value, totalLPReinvest);
     }
 
     function safeHptTransfer(uint256 pid, address _to, uint256 _amount) internal {
