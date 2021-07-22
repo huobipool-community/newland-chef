@@ -80,7 +80,7 @@ contract BoosterStakingChef is Ownable{
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
-    event Claim(address token, address indexed user, address to, uint amount);
+    event Claim(address token, address indexed user, uint amount, uint actAmt);
 
     constructor(
         IERC20 _hpt,
@@ -123,10 +123,12 @@ contract BoosterStakingChef is Ownable{
     function getPoolData(uint _pid) public view returns(uint mdxPerBlock, uint mdxPoolTotalAmount, uint depositFee, uint withdrawFee, uint refundFee) {
         PoolInfo storage pool = poolInfo[_pid];
 
+        uint256 mdxTotalAllocPoint = mdxChef.totalAllocPoint();
         IMdexChef.MdxPoolInfo memory mdxPoolInfo = mdxChef.poolInfo(pool.mdxPid);
         IStrategyConfig config = IStrategyConfig(pool.strategyLink.sconfig());
 
-        mdxPerBlock = mdxChef.reward(block.number);
+        mdxPerBlock = mdxChef.reward(block.number).mul(mdxPoolInfo.allocPoint).div(mdxTotalAllocPoint);
+
         mdxPoolTotalAmount = mdxPoolInfo.totalAmount;
         (,depositFee) = config.getDepositFee(address(pool.strategyLink), pool.miningChefPid);
         (,withdrawFee) = config.getWithdrawFee(address(pool.strategyLink), pool.miningChefPid);
@@ -483,6 +485,8 @@ contract BoosterStakingChef is Ownable{
 
         pool.lpBalance = pool.lpBalance.add(_amount);
         pool.totalPoints = pool.totalPoints.add(addPoint);
+        uint totalLPReinvest = pool.strategyLink.pendingLPAmount(pool.miningChefPid, address(this));
+        pool.totalLPReinvest = totalLPReinvest >= pool.lpBalance ? totalLPReinvest:pool.lpBalance;
 
         user.lpPoints = user.lpPoints.add(addPoint);
         user.amount = user.amount.add(_amount);
@@ -532,6 +536,9 @@ contract BoosterStakingChef is Ownable{
             tenBankHall.withdrawLPToken(pool.sid, withdrawRate, 0, 0);
         }
 
+        uint totalLPReinvest = pool.strategyLink.pendingLPAmount(pool.miningChefPid, address(this));
+        pool.totalLPReinvest = totalLPReinvest >= pool.lpBalance ? totalLPReinvest:pool.lpBalance;
+
         emit Withdraw(_user, _pid, _amount);
     }
 
@@ -551,11 +558,13 @@ contract BoosterStakingChef is Ownable{
         hptRewardBalance = hptRewardBalance.sub(_amount);
         userInfo[pid][_to].hptRewarded += _amount;
         uint256 hptBal = hpt.balanceOf(address(this));
+        uint amtOld = _amount;
         if (_amount > hptBal) {
             _amount = hptBal;
         }
         if (_amount > 0) {
             hpt.transfer(_to, _amount);
+            emit Claim(address(hpt), _to, amtOld, _amount);
         }
     }
 
@@ -563,11 +572,13 @@ contract BoosterStakingChef is Ownable{
         miningRewardBalance = miningRewardBalance.sub(_amount);
         userInfo[pid][_to].miningRewarded += _amount;
         uint256 miningBal = mining.balanceOf(address(this));
+        uint amtOld = _amount;
         if (_amount > miningBal) {
             _amount = miningBal;
         }
         if (_amount > 0) {
             mining.transfer(_to, _amount);
+            emit Claim(address(mining), _to, amtOld, _amount);
         }
     }
 
@@ -605,15 +616,15 @@ contract BoosterStakingChef is Ownable{
         IERC20 token0 = IERC20(lpToken.token0());
         IERC20 token1 = IERC20(lpToken.token1());
 
+        _userEmergencyWithdraw(_pid, address(token0));
+        _userEmergencyWithdraw(_pid, address(token1));
+
         user.lpPoints = 0;
         if (pool.totalPoints > user.lpPoints) {
             pool.totalPoints = pool.totalPoints.sub(user.lpPoints);
         } else {
             pool.totalPoints = 0;
         }
-
-        _userEmergencyWithdraw(_pid, address(token0));
-        _userEmergencyWithdraw(_pid, address(token1));
     }
 
     function _userEmergencyWithdraw(uint _pid, address token) internal {

@@ -26,6 +26,7 @@ async function main() {
     )
 
     if (chef.$isNew) {
+        await emergency.$transferOwnership(chef.address);
         await chef.$setEmergencyAddress(emergency.address);
 
         // USDT-HPT
