@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./Treasury.sol";
 
 import "./interface/IMdexChef.sol";
 import './interface/IStrategyLink.sol';
@@ -19,6 +20,7 @@ import "./interface/IStrategyConfig.sol";
 
 import "./library/TenMath.sol";
 import "./library/TransferHelper.sol";
+import "./library/MdxLib.sol";
 
 contract BoosterStakingChef is Ownable{
     using SafeMath for uint256;
@@ -44,10 +46,10 @@ contract BoosterStakingChef is Ownable{
         uint256 accMiningPerShare;
         uint256 totalLPReinvest;        // total of lptoken amount with totalLPAmount and reinvest rewards，
         uint256 totalPoints;
-        ITenBankHall tenBankHall;
         IStrategyLink strategyLink;
         uint sid;
         uint mdxPid;
+        bool paused;
     }
 
     // The HPT TOKEN!
@@ -73,6 +75,8 @@ contract BoosterStakingChef is Ownable{
     address public factory;
     address public WHT;
     IMdexChef public mdxChef;
+    ITenBankHall tenBankHall;
+    Treasury emergency;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -87,7 +91,8 @@ contract BoosterStakingChef is Ownable{
         address _treasuryAddress,
         address _mdxFactory,
         address _WHT,
-        IMdexChef _mdxChef
+        IMdexChef _mdxChef,
+        ITenBankHall _tenBankHall
     ) public {
         hpt = _hpt;
         hptPerBlock = _hptPerBlock;
@@ -98,10 +103,17 @@ contract BoosterStakingChef is Ownable{
         factory = _mdxFactory;
         WHT = _WHT;
         mdxChef = _mdxChef;
+        tenBankHall = _tenBankHall;
     }
 
     function getRewardToken() external view returns(address) {
         return address(mining);
+    }
+
+    function setEmergencyAddress(Treasury _emergency) public onlyOwner {
+        if (address(emergency) == address(0)) {
+            emergency = _emergency;
+        }
     }
 
     function setTreasuryAddress(address _treasuryAddress) public onlyOwner {
@@ -176,7 +188,6 @@ contract BoosterStakingChef is Ownable{
     // Add a new lp to the pool. Can only be called by the owner.
     function add(
         uint256 _allocPoint,
-        ITenBankHall _tenBankHall,
         uint _sid
     ) public onlyOwner {
         massUpdatePools();
@@ -184,12 +195,11 @@ contract BoosterStakingChef is Ownable{
         block.number > startBlock ? block.number : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
 
-        (,address iLink, uint256 pid) = _tenBankHall.strategyInfo(_sid);
+        (,address iLink, uint256 pid) = tenBankHall.strategyInfo(_sid);
         (, , address lpToken, uint256 poolId,,) = IStrategyLink(iLink).getPoolInfo(pid);
 
         poolInfo.push(
             PoolInfo({
-            tenBankHall: _tenBankHall,
             sid: _sid,
             strategyLink: IStrategyLink(iLink),
             miningChefPid: pid,
@@ -201,7 +211,8 @@ contract BoosterStakingChef is Ownable{
             accMiningPerShare: 0,
             totalPoints: 0,
             totalLPReinvest: 0,
-            mdxPid: poolId
+            mdxPid: poolId,
+            paused: false
             })
         );
     }
@@ -210,7 +221,6 @@ contract BoosterStakingChef is Ownable{
     function set(
         uint256 _pid,
         uint256 _allocPoint,
-        ITenBankHall _tenBankHall,
         uint _sid
     ) public onlyOwner {
         massUpdatePools();
@@ -220,10 +230,9 @@ contract BoosterStakingChef is Ownable{
 
         poolInfo[_pid].allocPoint = _allocPoint;
 
-        (,address iLink, uint256 pid) = _tenBankHall.strategyInfo(_sid);
+        (,address iLink, uint256 pid) = tenBankHall.strategyInfo(_sid);
         (, , address lpToken, uint256 poolId,,) = IStrategyLink(iLink).getPoolInfo(pid);
 
-        poolInfo[_pid].tenBankHall = _tenBankHall;
         poolInfo[_pid].sid = _sid;
         poolInfo[_pid].strategyLink = IStrategyLink(iLink);
         poolInfo[_pid].miningChefPid = pid;
@@ -324,6 +333,7 @@ contract BoosterStakingChef is Ownable{
     // Update reward variables of the given pool to be up-to-date.
     function updatePool(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
+        require(!pool.paused, 'not paused');
         if (block.number <= pool.lastRewardBlock) {
             return;
         }
@@ -378,11 +388,11 @@ contract BoosterStakingChef is Ownable{
         uint amountAMin,
         uint amountBMin) public {
         uint _amount;
-        address pair = pairFor(tokenA, tokenB);
+        address pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         if (amountADesired != 0) {
-            (, , _amount) = addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
+            (, , _amount) = MdxLib.addLiquidity(factory, tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this));
         }
         deposit(_pid, _amount);
     }
@@ -393,11 +403,11 @@ contract BoosterStakingChef is Ownable{
         uint amountTokenMin,
         uint amountETHMin) public payable {
         uint _amount;
-        address pair = pairFor(token, WHT);
+        address pair = IMdexFactory(factory).pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         if (amountTokenDesired != 0) {
-            (, , _amount) = addLiquidityETH(token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
+            (, , _amount) = MdxLib.addLiquidityETH(WHT, factory, token, amountTokenDesired, amountTokenMin, amountETHMin, address(this));
         }
         deposit(_pid, _amount);
     }
@@ -408,13 +418,13 @@ contract BoosterStakingChef is Ownable{
         uint rate,
         uint amountAMin,
         uint amountBMin) public {
-        address pair = pairFor(tokenA, tokenB);
+        address pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         withdraw(_pid, rate);
         uint liquidity = pool.lpToken.balanceOf(address(this));
         if (liquidity != 0) {
-            removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
+            MdxLib.removeLiquidity(factory, tokenA, tokenB, liquidity, amountAMin, amountBMin, msg.sender);
         }
     }
 
@@ -423,7 +433,7 @@ contract BoosterStakingChef is Ownable{
         uint rate,
         uint amountTokenMin,
         uint amountETHMin) public {
-        address pair = pairFor(token, WHT);
+        address pair = IMdexFactory(factory).pairFor(token, WHT);
         PoolInfo storage pool = poolInfo[_pid];
         require(pair == address(pool.lpToken), "wrong pid");
         withdraw(_pid, rate);
@@ -431,7 +441,7 @@ contract BoosterStakingChef is Ownable{
         if (liquidity != 0) {
             uint amountToken;
             uint amountETH;
-            (amountToken, amountETH) = removeLiquidity(token, WHT, liquidity, amountTokenMin, amountETHMin, address(this));
+            (amountToken, amountETH) = MdxLib.removeLiquidity(factory, token, WHT, liquidity, amountTokenMin, amountETHMin, address(this));
             TransferHelper.safeTransfer(token, msg.sender, amountToken);
             IWHT(WHT).withdraw(amountETH);
             TransferHelper.safeTransferETH(msg.sender, amountETH);
@@ -461,9 +471,9 @@ contract BoosterStakingChef is Ownable{
         }
 
         if (_amount > 0) {
-            pool.lpToken.approve(address(pool.tenBankHall), 0);
-            pool.lpToken.approve(address(pool.tenBankHall), _amount);
-            pool.tenBankHall.depositLPToken(pool.sid, _amount, 0, 0, 0, 0);
+            pool.lpToken.approve(address(tenBankHall), 0);
+            pool.lpToken.approve(address(tenBankHall), _amount);
+            tenBankHall.depositLPToken(pool.sid, _amount, 0, 0, 0, 0);
         }
 
         uint256 addPoint = _amount;
@@ -519,7 +529,7 @@ contract BoosterStakingChef is Ownable{
         user.miningRewardDebt = user.amount.mul(pool.accMiningPerShare).div(1e12);
 
         if (withdrawRate > 0) {
-            pool.tenBankHall.withdrawLPToken(pool.sid, withdrawRate, 0, 0);
+            tenBankHall.withdrawLPToken(pool.sid, withdrawRate, 0, 0);
         }
 
         emit Withdraw(_user, _pid, _amount);
@@ -561,96 +571,59 @@ contract BoosterStakingChef is Ownable{
         }
     }
 
+    function emergencyWithdraw(uint _pid) public onlyOwner {
+        PoolInfo storage pool = poolInfo[_pid];
+        require(!pool.paused, 'not paused');
+        pool.paused = true;
 
-    // ************
-    function pairFor(address tokenA, address tokenB) internal view returns (address pair){
-        pair = IMdexFactory(factory).pairFor(tokenA, tokenB);
-    }
+        IMdexPair lpToken = IMdexPair(address(pool.lpToken));
+        IERC20 token0 = IERC20(lpToken.token0());
+        IERC20 token1 = IERC20(lpToken.token1());
 
-    // **** ADD LIQUIDITY ****
-    function _addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin
-    ) internal view returns (uint amountA, uint amountB) {
-        (uint reserveA, uint reserveB) = IMdexFactory(factory).getReserves(tokenA, tokenB);
-        if (reserveA == 0 && reserveB == 0) {
-            (amountA, amountB) = (amountADesired, amountBDesired);
-        } else {
-            uint amountBOptimal = IMdexFactory(factory).quote(amountADesired, reserveA, reserveB);
-            if (amountBOptimal <= amountBDesired) {
-                require(amountBOptimal >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
-                (amountA, amountB) = (amountADesired, amountBOptimal);
-            } else {
-                uint amountAOptimal = IMdexFactory(factory).quote(amountBDesired, reserveB, reserveA);
-                assert(amountAOptimal <= amountADesired);
-                require(amountAOptimal >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
-                (amountA, amountB) = (amountAOptimal, amountBDesired);
-            }
+        uint token0Bal = token0.balanceOf(address(this));
+        uint token1Bal = token1.balanceOf(address(this));
+
+        tenBankHall.emergencyWithdraw(pool.sid, 0, 0);
+
+        uint token0Amt = token0.balanceOf(address(this));
+        uint token1Amt = token1.balanceOf(address(this));
+
+        if (token0Amt > token0Bal) {
+            token0.approve(address(emergency), token0Amt - token0Bal);
+            emergency.deposit(_pid, address(token0), token0Amt - token0Bal);
+        }
+        if (token1Amt > token1Bal) {
+            token1.approve(address(emergency), token1Amt - token1Bal);
+            emergency.deposit(_pid, address(token1), token1Amt - token1Bal);
         }
     }
 
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to
-    ) internal returns (uint amountA, uint amountB, uint liquidity) {
-        (amountA, amountB) = _addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin);
-        address pair = pairFor(tokenA, tokenB);
-        TransferHelper.safeTransferFrom(tokenA, msg.sender, pair, amountA);
-        TransferHelper.safeTransferFrom(tokenB, msg.sender, pair, amountB);
-        liquidity = IMdexPair(pair).mint(to);
+    function userEmergencyWithdraw(uint _pid) public {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        IMdexPair lpToken = IMdexPair(address(pool.lpToken));
+        IERC20 token0 = IERC20(lpToken.token0());
+        IERC20 token1 = IERC20(lpToken.token1());
+
+        user.lpPoints = 0;
+        if (pool.totalPoints > user.lpPoints) {
+            pool.totalPoints = pool.totalPoints.sub(user.lpPoints);
+        } else {
+            pool.totalPoints = 0;
+        }
+
+        _userEmergencyWithdraw(_pid, address(token0));
+        _userEmergencyWithdraw(_pid, address(token1));
     }
 
-    function addLiquidityETH(
-        address token,
-        uint amountTokenDesired,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to
-    ) internal returns (uint amountToken, uint amountETH, uint liquidity) {
-        (amountToken, amountETH) = _addLiquidity(
-            token,
-            WHT,
-            amountTokenDesired,
-            msg.value,
-            amountTokenMin,
-            amountETHMin
-        );
-        address pair = pairFor(token, WHT);
-        TransferHelper.safeTransferFrom(token, msg.sender, pair, amountToken);
-        IWHT(WHT).deposit{value : amountETH}();
-        assert(IWHT(WHT).transfer(pair, amountETH));
-        liquidity = IMdexPair(pair).mint(to);
-        // refund dust eth, if any
-        if (msg.value > amountETH) TransferHelper.safeTransferETH(msg.sender, msg.value - amountETH);
+    function _userEmergencyWithdraw(uint _pid, address token) internal {
+        PoolInfo storage pool = poolInfo[_pid];
+        UserInfo storage user = userInfo[_pid][msg.sender];
+        uint tokenTotal = emergency.userTokenAmt(_pid, token);
+        uint userToken = user.lpPoints.mul(tokenTotal).div(pool.totalPoints);
+        emergency.withdraw(_pid, token, userToken, msg.sender);
     }
 
-    // **** REMOVE LIQUIDITY ****
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint liquidity,
-        uint amountAMin,
-        uint amountBMin,
-        address to
-    ) internal returns (uint amountA, uint amountB) {
-        address pair = pairFor(tokenA, tokenB);
-        IMdexPair(pair).transfer(pair, liquidity);
-        // send liquidity to pair
-        (uint amount0, uint amount1) = IMdexPair(pair).burn(to);
-        (address token0,) = IMdexFactory(factory).sortTokens(tokenA, tokenB);
-        (amountA, amountB) = tokenA == token0 ? (amount0, amount1) : (amount1, amount0);
-        require(amountA >= amountAMin, 'MdexRouter: INSUFFICIENT_A_AMOUNT');
-        require(amountB >= amountBMin, 'MdexRouter: INSUFFICIENT_B_AMOUNT');
-    }
 
 fallback() external {}
 receive() payable external {}

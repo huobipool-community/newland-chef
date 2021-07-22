@@ -1,6 +1,6 @@
 require("@nomiclabs/hardhat-waffle");
 require("@nomiclabs/hardhat-truffle5");
-
+require('hardhat-contract-sizer');
 require("./scripts/_runUtil.js");
 
 let $keys = []
@@ -28,6 +28,10 @@ module.exports = {
         enabled: true,
       }
     }
+  },
+  contractSizer: {
+    alphaSort: true,
+    runOnCompile: true
   },
   networks: {
     hardhat: {

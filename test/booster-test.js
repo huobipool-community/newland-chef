@@ -18,6 +18,8 @@ let strategy = '0xAfaf11781664705Ba3Cd3cC4E9186F13368F6728'
 
 describe("BoosterStakingChef", function () {
     before(async function () {
+        let emergency = await $deploy('Treasury')
+
         chef = await $deploy('BoosterStakingChef',
             HPT,
             '10000000000000000',
@@ -27,11 +29,15 @@ describe("BoosterStakingChef", function () {
             '0x2f1178bd9596ab649014441dDB83c2f240B5527C',
             MDX_FACTORY,
             WHT,
-            MDX_CHEF
+            MDX_CHEF,
+            TenBankHall
         )
 
         if (chef.$isNew) {
-            await chef.$add(10, TenBankHall, 43)
+            await chef.$setEmergencyAddress(emergency.address);
+
+            // USDT-HPT
+            await chef.$add(10, 43)
         }
 
         await hre.network.provider.request({
