@@ -71,12 +71,12 @@ contract BoosterStakingChef is Ownable{
     uint256 public miningProfitRate;
     // The reward token
     IERC20 public mining;
-    address public treasuryAddress;
+    address public profitAddress;
     address public factory;
     address public WHT;
     IMdexChef public mdxChef;
-    ITenBankHall tenBankHall;
-    Treasury emergency;
+    ITenBankHall public tenBankHall;
+    Treasury public emergency;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount);
@@ -88,7 +88,7 @@ contract BoosterStakingChef is Ownable{
         uint256 _startBlock,
         uint256 _miningProfitRate,
         IERC20 _mining,
-        address _treasuryAddress,
+        address _profitAddress,
         address _mdxFactory,
         address _WHT,
         IMdexChef _mdxChef,
@@ -99,7 +99,7 @@ contract BoosterStakingChef is Ownable{
         startBlock = _startBlock;
         miningProfitRate = _miningProfitRate;
         mining = _mining;
-        treasuryAddress = _treasuryAddress;
+        profitAddress = _profitAddress;
         factory = _mdxFactory;
         WHT = _WHT;
         mdxChef = _mdxChef;
@@ -116,8 +116,8 @@ contract BoosterStakingChef is Ownable{
         }
     }
 
-    function setTreasuryAddress(address _treasuryAddress) public onlyOwner {
-        treasuryAddress = _treasuryAddress;
+    function setProfitAddress(address _profitAddress) public onlyOwner {
+        profitAddress = _profitAddress;
     }
 
     function getPoolData(uint _pid) public view returns(uint mdxPerBlock, uint mdxPoolTotalAmount, uint depositFee, uint withdrawFee, uint refundFee) {
@@ -328,7 +328,10 @@ contract BoosterStakingChef is Ownable{
     function massUpdatePools() public {
         uint256 length = poolInfo.length;
         for (uint256 pid = 0; pid < length; ++pid) {
-            updatePool(pid);
+            PoolInfo storage pool = poolInfo[pid];
+            if (!pool.paused) {
+                updatePool(pid);
+            }
         }
     }
 
@@ -366,7 +369,7 @@ contract BoosterStakingChef is Ownable{
             uint256 delta = miningBalanceNew.sub(miningBalancePrior);
             //keep profit to owner by miningProfitRate
             uint256 miningProfit = delta.mul(miningProfitRate).div(1e18);
-            mining.transfer(treasuryAddress, miningProfit);
+            mining.transfer(profitAddress, miningProfit);
 
             uint256 miningReward = delta.sub(miningProfit);
             miningRewardBalance = miningRewardBalance.add(miningReward);
@@ -611,6 +614,7 @@ contract BoosterStakingChef is Ownable{
 
     function userEmergencyWithdraw(uint _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
+        require(pool.paused, 'only paused');
         UserInfo storage user = userInfo[_pid][msg.sender];
         IMdexPair lpToken = IMdexPair(address(pool.lpToken));
         IERC20 token0 = IERC20(lpToken.token0());
