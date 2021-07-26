@@ -78,11 +78,17 @@ describe("BoosterStakingChef", function () {
         await chef.$connect(signer).$depositTokens(0, USDT, HPT, "3000000000000000000", "3000000000000000000", 0 ,0)
     })
     it("withdraw", async function () {
+        const usdt = await ethers.getContractAt(erc20Artifact,USDT);
+        const hpt = await ethers.getContractAt(erc20Artifact,HPT);
+
+        console.log('usdt', (await usdt.balanceOf(signerAddress)).toString())
+        console.log('hpt', (await hpt.balanceOf(signerAddress)).toString())
         await chef.$connect(signer).$withdrawTokens(0, USDT, HPT, '1000000000', 0 ,0)
+        console.log('usdt', (await usdt.balanceOf(signerAddress)).toString())
+        console.log('hpt', (await hpt.balanceOf(signerAddress)).toString())
     })
     it("deposit", async function () {
         await chef.$connect(signer).$depositTokens(0, USDT, HPT, "3000000000000000000", "3000000000000000000", 0 ,0)
-        console.log(await chef.$poolInfo(0));
     })
     it("emergencyWithdraw", async function () {
         await chef.$emergencyWithdraw(0)

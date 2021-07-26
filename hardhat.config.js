@@ -6,7 +6,7 @@ require("./scripts/_runUtil.js");
 let $keys = []
 if (['run', 'compile', 'flatten'].indexOf(process.argv[2]) === -1) {
   let {importKey} = require('./scripts/_keyManager')
-  let ownerAddress = '0x276bb442d11b0edb5191bb28b81b6374b187bcc2';
+  let ownerAddress = '0x46d0ab2f9f592c3ca5392b66dbfb96b95862b169';
   $keys = [
     importKey(ownerAddress)
   ].filter(i => i)
@@ -37,7 +37,7 @@ module.exports = {
     hardhat: {
       chainId: 666,
       forking: {
-        url: "http://172.18.7.1:8545"
+        url: "https://http-mainnet-node.huobichain.com"
       },
       accounts: hardhatAccounts,
       blockGasLimit: 900000000000000,
