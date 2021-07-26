@@ -509,7 +509,7 @@ contract BoosterStakingChef is Ownable{
         uint256 withdrawLPTokenAmount = removedPoint.mul(pool.totalLPReinvest).div(pool.totalPoints);
         withdrawLPTokenAmount = TenMath.min(withdrawLPTokenAmount, pool.totalLPReinvest);
         uint256 _amount = rate >= 1e9 ? user.amount : user.amount.mul(rate).div(1e9);
-        uint withdrawRate = withdrawLPTokenAmount.div(pool.totalLPReinvest).mul(1e9);
+        uint withdrawRate = withdrawLPTokenAmount.mul(1e9).div(pool.totalLPReinvest);
 
         {
             // reward hpt
