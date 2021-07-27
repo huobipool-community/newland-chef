@@ -478,7 +478,16 @@ contract BoosterStakingChef is Ownable{
         if (_amount > 0) {
             pool.lpToken.approve(address(tenBankHall), 0);
             pool.lpToken.approve(address(tenBankHall), _amount);
-            tenBankHall.depositLPToken(pool.sid, _amount, 0, 0, 0, 0);
+
+            IMdexPair lpToken = IMdexPair(address(pool.lpToken));
+            IERC20 token0 = IERC20(lpToken.token0());
+            IERC20 token1 = IERC20(lpToken.token1());
+
+            uint token0Bal = token0.balanceOf(address(this));
+            uint token1Bal = token1.balanceOf(address(this));
+            _amount = tenBankHall.depositLPToken(pool.sid, _amount, 0, 0, 0, 0);
+            remainTransfer(token0, token0Bal);
+            remainTransfer(token1, token1Bal);
         }
 
         uint256 addPoint = _amount;
@@ -555,6 +564,13 @@ contract BoosterStakingChef is Ownable{
 
         value = userInfo[_pid][_account].lpPoints.mul(totalLPReinvest).div(pool.totalPoints);
         value = TenMath.min(value, totalLPReinvest);
+    }
+
+    function remainTransfer(IERC20 token, uint beforeBal) internal {
+        uint tokenBalNew = token.balanceOf(address(this));
+        if (tokenBalNew > beforeBal) {
+            token.transfer(msg.sender, tokenBalNew - beforeBal);
+        }
     }
 
     function safeHptTransfer(uint256 pid, address _to, uint256 _amount) internal {
@@ -635,7 +651,13 @@ contract BoosterStakingChef is Ownable{
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         uint tokenTotal = emergency.userTokenAmt(_pid, token);
-        uint userToken = user.lpPoints.mul(tokenTotal).div(pool.totalPoints);
+        uint userToken;
+
+        if (pool.totalPoints > user.lpPoints) {
+            userToken = user.lpPoints.mul(tokenTotal).div(pool.totalPoints);
+        } else {
+            userToken = tokenTotal;
+        }
         emergency.withdraw(_pid, token, userToken, msg.sender);
     }
 
