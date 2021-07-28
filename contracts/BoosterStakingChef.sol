@@ -639,12 +639,8 @@ contract BoosterStakingChef is Ownable{
         _userEmergencyWithdraw(_pid, address(token0));
         _userEmergencyWithdraw(_pid, address(token1));
 
+        pool.totalPoints = TenMath.safeSub(pool.totalPoints, user.lpPoints);
         user.lpPoints = 0;
-        if (pool.totalPoints > user.lpPoints) {
-            pool.totalPoints = pool.totalPoints.sub(user.lpPoints);
-        } else {
-            pool.totalPoints = 0;
-        }
     }
 
     function _userEmergencyWithdraw(uint _pid, address token) internal {
