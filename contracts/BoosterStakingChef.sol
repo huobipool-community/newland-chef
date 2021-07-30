@@ -154,10 +154,8 @@ contract BoosterStakingChef is Ownable{
         }
 
         (,,,, uint256 totalLPAmount,) = pool.strategyLink.getPoolInfo(pool.miningChefPid);
-        rewardPerBlock = rewardPerBlock.mul(pool.lpBalance).div(totalLPAmount);
         uint baseVal = 1e18;
-        rewardPerBlock = rewardPerBlock.mul(baseVal.sub(miningProfitRate)).div(baseVal);
-        return rewardPerBlock;
+        return rewardPerBlock.mul(baseVal.sub(miningProfitRate)).mul(pool.lpBalance).div(totalLPAmount).div(baseVal);
     }
 
     function hptRewardPerBlock(uint _pid) external view returns(uint)  {
@@ -178,7 +176,7 @@ contract BoosterStakingChef is Ownable{
         require(erc20 != address(mining), 'not mining token');
         uint eb = IERC20(erc20).balanceOf(address(this));
         if (eb > 0) {
-            IERC20(erc20).transfer(msg.sender, eb);
+            IERC20(erc20).safeTransfer(msg.sender, eb);
         }
 
         uint cb = address(this).balance;
@@ -369,7 +367,7 @@ contract BoosterStakingChef is Ownable{
             uint256 delta = miningBalanceNew.sub(miningBalancePrior);
             //keep profit to owner by miningProfitRate
             uint256 miningProfit = delta.mul(miningProfitRate).div(1e18);
-            mining.transfer(profitAddress, miningProfit);
+            mining.safeTransfer(profitAddress, miningProfit);
 
             uint256 miningReward = delta.sub(miningProfit);
             miningRewardBalance = miningRewardBalance.add(miningReward);
@@ -569,7 +567,7 @@ contract BoosterStakingChef is Ownable{
     function remainTransfer(IERC20 token, uint beforeBal) internal {
         uint tokenBalNew = token.balanceOf(address(this));
         if (tokenBalNew > beforeBal) {
-            token.transfer(msg.sender, tokenBalNew - beforeBal);
+            token.safeTransfer(msg.sender, tokenBalNew - beforeBal);
         }
     }
 
@@ -582,7 +580,7 @@ contract BoosterStakingChef is Ownable{
             _amount = hptBal;
         }
         if (_amount > 0) {
-            hpt.transfer(_to, _amount);
+            hpt.safeTransfer(_to, _amount);
             emit Claim(address(hpt), _to, amtOld, _amount);
         }
     }
@@ -596,7 +594,7 @@ contract BoosterStakingChef is Ownable{
             _amount = miningBal;
         }
         if (_amount > 0) {
-            mining.transfer(_to, _amount);
+            mining.safeTransfer(_to, _amount);
             emit Claim(address(mining), _to, amtOld, _amount);
         }
     }
