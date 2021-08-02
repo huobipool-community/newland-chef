@@ -18,7 +18,7 @@ async function main() {
         0,
         '100000000000000000',
         BOO,
-        '0x2f1178bd9596ab649014441dDB83c2f240B5527C',
+        '0xb3fc6b9be3ad6b2917d304d4f5645a311bcfd0a8',
         MDX_FACTORY,
         WHT,
         MDX_CHEF,
