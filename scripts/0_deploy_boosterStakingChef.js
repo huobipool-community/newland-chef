@@ -14,9 +14,9 @@ async function main() {
 
     let chef = await $deploy('BoosterStakingChef',
         HPT,
-        '10000000000000000',
+        '0',
         0,
-        '100000000000000000',
+        '0',
         BOO,
         '0xb3fc6b9be3ad6b2917d304d4f5645a311bcfd0a8',
         MDX_FACTORY,
