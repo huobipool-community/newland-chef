@@ -42,13 +42,15 @@ module.exports = {
       accounts: hardhatAccounts,
       blockGasLimit: 900000000000000,
       gasPrice,
-      allowUnlimitedContractSize: true
+      allowUnlimitedContractSize: true,
+      gas: 3000000
     },
     heco: {
       url: "https://http-mainnet-node.huobichain.com",
       accounts: $keys,
       gasPrice,
-      allowUnlimitedContractSize: true
+      allowUnlimitedContractSize: true,
+      gas: 3000000
     },
     hecoTest: {
       url: "https://http-testnet.hecochain.com",
