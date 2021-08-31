@@ -158,7 +158,7 @@ contract CompoundLens {
         uint underlyingPrice;
     }
 
-    function cTokenUnderlyingPrice(CToken cToken) public returns (CTokenUnderlyingPrice memory) {
+    function cTokenUnderlyingPrice(CToken cToken) public view returns (CTokenUnderlyingPrice memory) {
         ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(cToken.comptroller()));
         PriceOracle priceOracle = comptroller.oracle();
 
@@ -338,7 +338,8 @@ contract CompoundLens {
             token = CErc20(address(market)).underlying();
             decimals = CErc20(token).decimals();
         }
-        uint dived = CErc20(address(market)).totalSupply().mul(CErc20(address(market)).exchangeRateStored()).mul(getPrice(token)).div(1e18);
+        CTokenUnderlyingPrice memory priceInfo = cTokenUnderlyingPrice(market);
+        uint dived = CErc20(address(market)).totalSupply().mul(CErc20(address(market)).exchangeRateStored()).mul(priceInfo.underlyingPrice).div(1e18);
         if (dived == 0) {
             return 0;
         }
@@ -360,12 +361,12 @@ contract CompoundLens {
             decimals = CErc20(token).decimals();
         }
 
-        uint borrowIndex = CErc20(address(market)).borrowIndex();
         uint dived = 0;
-        if (borrowIndex == 0) {
-            dived = CErc20(address(market)).totalBorrows().mul(1e18).mul(getPrice(token));
+        CTokenUnderlyingPrice memory priceInfo = cTokenUnderlyingPrice(market);
+        if (CErc20(address(market)).borrowIndex()  == 0) {
+            dived = CErc20(address(market)).totalBorrows().mul(1e18).mul(priceInfo.underlyingPrice);
         } else {
-            dived = CErc20(address(market)).totalBorrows().mul(1e18).div(CErc20(address(market)).borrowIndex()).mul(getPrice(token));
+            dived = CErc20(address(market)).totalBorrows().mul(1e18).div(CErc20(address(market)).borrowIndex()).mul(priceInfo.underlyingPrice);
         }
         if (dived == 0) {
             return 0;
