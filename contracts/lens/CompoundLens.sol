@@ -1,10 +1,13 @@
 pragma solidity ^0.5.16;
 pragma experimental ABIEncoderV2;
 
-import "../CErc20.sol";
-import "../CToken.sol";
-import "../PriceOracle.sol";
-import "../EIP20Interface.sol";
+import "./CErc20.sol";
+import "./CToken.sol";
+import "./PriceOracle.sol";
+import "./EIP20Interface.sol";
+import './SafeMath.sol';
+import "./IMdexPair.sol";
+import "./IMdexFactory.sol";
 
 interface ComptrollerLensInterface {
     function markets(address) external view returns (bool, uint);
@@ -30,11 +33,11 @@ interface CanLensInterface {
 
 }
 
-contract CompoundLens {
-
+contract mainCompoundLens {
+    using SafeMath for uint;
     uint public constant blocksPerYear = 10512000;
-    address public usdt = 0xa71edc38d189767582c38a3145b5873052c3e47a;
-
+    address public usdt = 0xa71EdC38d189767582C38A3145b5873052c3e47a;
+    address public husd = 0x0298c2b32eaE4da002a15f36fdf7615BEa3DA047;
 
     struct CTokenMetadata {
         address cToken;
@@ -60,7 +63,7 @@ contract CompoundLens {
         address underlyingAssetAddress;
         uint underlyingDecimals;
 
-        if (compareStrings(cToken.symbol(), "cETH")) {
+        if (compareStrings(cToken.symbol(), "cHT")) {
             underlyingAssetAddress = address(0);
             underlyingDecimals = 18;
         } else {
@@ -84,7 +87,7 @@ contract CompoundLens {
             underlyingAssetAddress: underlyingAssetAddress,
             cTokenDecimals: cToken.decimals(),
             underlyingDecimals: underlyingDecimals
-        });
+            });
     }
 
     function cTokenMetadataAll(CToken[] calldata cTokens) external returns (CTokenMetadata[] memory) {
@@ -108,16 +111,16 @@ contract CompoundLens {
 
     function cTokenBalances(CToken cToken, address payable account) public returns (CTokenBalances memory) {
         ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(cToken.comptroller()));
-        (bool isMember) = comptroller.checkMembership(account,address(cToken));
-        
-        
+        (bool isMember) = comptroller.checkMembership(account, cToken);
+
+
         uint balanceOf = cToken.balanceOf(account);
         uint borrowBalanceCurrent = cToken.borrowBalanceCurrent(account);
         uint balanceOfUnderlying = cToken.balanceOfUnderlying(account);
         uint tokenBalance;
         uint tokenAllowance;
 
-        if (compareStrings(cToken.symbol(), "cETH")) {
+        if (compareStrings(cToken.symbol(), "cHT")) {
             tokenBalance = account.balance;
             tokenAllowance = account.balance;
         } else {
@@ -134,8 +137,8 @@ contract CompoundLens {
             balanceOfUnderlying: balanceOfUnderlying,
             tokenBalance: tokenBalance,
             tokenAllowance: tokenAllowance,
-            isMember
-        });
+            isMember: isMember
+            });
     }
 
     function cTokenBalancesAll(CToken[] calldata cTokens, address payable account) external returns (CTokenBalances[] memory) {
@@ -156,10 +159,19 @@ contract CompoundLens {
         ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(cToken.comptroller()));
         PriceOracle priceOracle = comptroller.oracle();
 
-        return CTokenUnderlyingPrice({
-            cToken: address(cToken),
-            underlyingPrice: priceOracle.getUnderlyingPrice(cToken)
-        });
+        uint decimals = CErc20(cToken.underlying()).decimals();
+
+        if (decimals != 18) {
+            return CTokenUnderlyingPrice({
+                cToken: address(cToken),
+                underlyingPrice: priceOracle.getUnderlyingPrice(cToken).div(10 ** (18 - decimals))
+                });
+        } else {
+            return CTokenUnderlyingPrice({
+                cToken: address(cToken),
+                underlyingPrice: priceOracle.getUnderlyingPrice(cToken)
+                });
+        }
     }
 
     function cTokenUnderlyingPriceAll(CToken[] calldata cTokens) external returns (CTokenUnderlyingPrice[] memory) {
@@ -185,7 +197,7 @@ contract CompoundLens {
             markets: comptroller.getAssetsIn(account),
             liquidity: liquidity,
             shortfall: shortfall
-        });
+            });
     }
 
 
@@ -197,41 +209,33 @@ contract CompoundLens {
 
     function getCompBalanceMetadataExt(EIP20Interface comp, address comptroller, address account) external returns (CompBalanceMetadataExt memory) {
         uint balance = comp.balanceOf(account);
-        if (compareStrings(comp.symbol(), "HPT")) {
-            ComptrollerLensInterface comptroller = ComptrollerLensInterface(comptroller);
-            comptroller.claimComp(account);
-            uint newBalance = comp.balanceOf(account);
-            uint accrued = comptroller.compAccrued(account);
-            uint total = add(accrued, newBalance, "sum comp total");
-            uint allocated = sub(total, balance, "sub allocated");
-
-            return CompBalanceMetadataExt({
-                balance: balance,
-                allocated: allocated,
-                price: uint(0)
-            });
-        } 
 
         if (compareStrings(comp.symbol(), "CAN")) {
-            CanLensInterface comptroller = CanLensInterface(comptroller);
-            comptroller.claimCan(account);
+            CanLensInterface cantroller = CanLensInterface(comptroller);
+            cantroller.claimCan(account);
             uint newBalance = comp.balanceOf(account);
-            uint accrued = comptroller.canAccrued(account);
+            uint accrued = cantroller.canAccrued(account);
+            uint total = add(accrued, newBalance, "sum comp total");
+            uint allocated = sub(total, balance, "sub allocated");
+            return CompBalanceMetadataExt({
+                balance: balance,
+                allocated: allocated,
+                price: getPrice(address(comp))
+                });
+        }else{
+            ComptrollerLensInterface hpttroller = ComptrollerLensInterface(comptroller);
+            hpttroller.claimComp(account);
+            uint newBalance = comp.balanceOf(account);
+            uint accrued = hpttroller.compAccrued(account);
             uint total = add(accrued, newBalance, "sum comp total");
             uint allocated = sub(total, balance, "sub allocated");
 
             return CompBalanceMetadataExt({
                 balance: balance,
                 allocated: allocated,
-                price: uint(0)
-            });
-        } 
-
-        return CompBalanceMetadataExt({
-            balance: balance,
-            allocated: uint(0),
-            price: uint(0)
-        });
+                price: getPrice(address(comp))
+                });
+        }
     }
 
     struct CTokenRewardApy {
@@ -240,46 +244,75 @@ contract CompoundLens {
         uint borrowApy;
     }
 
-    function cTokenRewardApyAll(CToken[] calldata cTokens,EIP20Interface comp ) external returns (CTokenRewardApy[] memory) {
+    function cTokenRewardApyAll(CToken[] calldata cTokens,EIP20Interface comp ) external view returns (CTokenRewardApy[] memory) {
         uint cTokenCount = cTokens.length;
         CTokenRewardApy[] memory res = new CTokenRewardApy[](cTokenCount);
-        uint priceComp = getPrice(address(comp),usdt);
-        
-
+        uint priceComp = getPrice(address(comp));
         for (uint i = 0; i < cTokenCount; i++) {
             uint speed = getSpeed(cTokens[i],comp);
-            uint supplyApy = supplyApy(cTokens[i], priceComp,speed);
-            uint borrowApy = borrowApy(cTokens[i], priceComp,speed);
+            uint supplyApy = supplyApy(cTokens[i], priceComp, speed);
+            uint borrowApy = borrowApy(cTokens[i], priceComp, speed);
             res[i] = CTokenRewardApy ({
-                cToken: cTokens[i], 
+                cToken: address(cTokens[i]),
                 supplyApy: supplyApy,
                 borrowApy: borrowApy
-            });
+                });
         }
         return res;
     }
 
-    function getPrice(address _token, address _base) internal view returns (uint256) {
-        return 1e18;
+    IMdexFactory factory = IMdexFactory(0xb0b670fc1F7724119963018DB0BfA86aDb22d941);
+    function getPrice(address _token) internal view returns (uint256) {
+        address _base;
+        if (compareStrings(CErc20(_token).symbol(), "CAN")) {
+            _base = husd;
+        }else{
+            _base = usdt;
+        }
+
+        if (_token == _base) {
+            return 10 ** uint(CErc20(_token).decimals());
+        }
+        IMdexPair lpToken = IMdexPair(factory.getPair(_token, _base));
+        (uint256 totalAmount0, uint256 totalAmount1,) = lpToken.getReserves();
+
+        CErc20 token0 = CErc20(lpToken.token0());
+        CErc20 token1 = CErc20(lpToken.token1());
+
+        if (address(token0) == _token) {
+            return getMktSellAmount(
+                10 ** uint(token0.decimals()), totalAmount0, totalAmount1
+            );
+        } else {
+            return getMktSellAmount(
+                10 ** uint(token1.decimals()), totalAmount1, totalAmount0
+            );
+        }
     }
 
-    function getSpeed(address market,EIP20Interface comp) internal view returns (uint256){
-        if (compareStrings(comp.symbol(), "HPT")) {
-            ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(market.comptroller()));
-            return comptroller.compSpeeds(market);
-        }
+    function getMktSellAmount(uint256 aIn, uint256 rIn, uint256 rOut) public pure returns (uint256) {
+        if (aIn == 0) return 0;
+        require(rIn > 0 && rOut > 0, "bad reserve values");
+        uint256 aInWithFee = aIn.mul(997);
+        uint256 numerator = aInWithFee.mul(rOut);
+        uint256 denominator = rIn.mul(1000).add(aInWithFee);
+        return numerator / denominator;
+    }
+
+    function getSpeed(CToken market,EIP20Interface comp) internal view returns (uint256){
         if (compareStrings(comp.symbol(), "CAN")) {
             CanLensInterface comptroller = CanLensInterface(address(market.comptroller()));
-            return comptroller.canSpeeds(market);
+            return comptroller.canSpeeds(address(market))/2;
+        }else{
+            ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(market.comptroller()));
+            return comptroller.compSpeeds(address(market))/2;
         }
-        return uint(0);
-
     }
-    function supplyApy(address market, uint priceComp,uint speed) public view returns (uint256) {
-        address token = CErc20(market).underlying();
+
+    function supplyApy(CToken market, uint priceComp,uint speed) public view returns (uint256) {
+        address token = CErc20(address(market)).underlying();
         uint decimals = CErc20(token).decimals();
-  
-        uint dived = CErc20(market).totalSupply().mul(CErc20(market).exchangeRateStored()).mul(getPrice(token, usdt)).div(1e18);
+        uint dived = CErc20(address(market)).totalSupply().mul(CErc20(address(market)).exchangeRateStored()).mul(getPrice(token)).div(1e18);
         if (dived == 0) {
             return 0;
         }
@@ -288,19 +321,19 @@ contract CompoundLens {
         } else {
             return speed.mul(priceComp).mul(10512000).mul(1e18).div(dived);
         }
-        
+
     }
 
-    function borrowApy(address market, uint priceComp,uint speed) public view returns (uint256) {
-        address token = CErc20(market).underlying();
+    function borrowApy(CToken market, uint priceComp,uint speed) public view returns (uint256) {
+        address token = CErc20(address(market)).underlying();
         uint decimals = CErc20(token).decimals();
-        
-        uint borrowIndex = CErc20(market).borrowIndex();
+
+        uint borrowIndex = CErc20(address(market)).borrowIndex();
         uint dived = 0;
         if (borrowIndex == 0) {
-            dived = CErc20(market).totalBorrows().mul(1e18).mul(getPrice(token, usdt));
+            dived = CErc20(address(market)).totalBorrows().mul(1e18).mul(getPrice(token));
         } else {
-            dived = CErc20(market).totalBorrows().mul(1e18).div(CErc20(market).borrowIndex()).mul(getPrice(token, usdt));
+            dived = CErc20(address(market)).totalBorrows().mul(1e18).div(CErc20(address(market)).borrowIndex()).mul(getPrice(token));
         }
         if (dived == 0) {
             return 0;
@@ -310,9 +343,9 @@ contract CompoundLens {
         } else {
             return speed.mul(priceComp).mul(10512000).mul(1e18).div(dived);
         }
-        
+
     }
-  
+
     function compareStrings(string memory a, string memory b) internal pure returns (bool) {
         return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
