@@ -30,14 +30,17 @@ interface CanLensInterface {
     function claimCan(address) external;
     function canAccrued(address) external view returns (uint);
     function canSpeeds(address _market) external view returns (uint256);
+    function getSupplySpeed(address _market) external view returns (uint256);
+    function getBorrowSpeed(address _market) external view returns (uint256);
 
 }
 
-contract mainCompoundLens {
+contract CompoundLens {
     using SafeMath for uint;
     uint public constant blocksPerYear = 10512000;
     address public usdt = 0xa71EdC38d189767582C38A3145b5873052c3e47a;
     address public husd = 0x0298c2b32eaE4da002a15f36fdf7615BEa3DA047;
+    address public wht = 0x5545153CCFcA01fbd7Dd11C0b23ba694D9509A6F;
 
     struct CTokenMetadata {
         address cToken;
@@ -159,7 +162,12 @@ contract mainCompoundLens {
         ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(cToken.comptroller()));
         PriceOracle priceOracle = comptroller.oracle();
 
-        uint decimals = CErc20(cToken.underlying()).decimals();
+        uint decimals;
+        if (compareStrings(CErc20(address(cToken)).symbol(), "cHT")) {
+            decimals = 18;
+        }else{
+            decimals = CErc20(CErc20(address(cToken)).underlying()).decimals();
+        }
 
         if (decimals != 18) {
             return CTokenUnderlyingPrice({
@@ -264,6 +272,9 @@ contract mainCompoundLens {
 
     IMdexFactory factory = IMdexFactory(0xb0b670fc1F7724119963018DB0BfA86aDb22d941);
     function getPrice(address _token) internal view returns (uint256) {
+        if (_token == address(0)) {
+            _token = wht;
+        }
         address _base;
         if (compareStrings(CErc20(_token).symbol(), "CAN")) {
             _base = husd;
@@ -276,10 +287,8 @@ contract mainCompoundLens {
         }
         IMdexPair lpToken = IMdexPair(factory.getPair(_token, _base));
         (uint256 totalAmount0, uint256 totalAmount1,) = lpToken.getReserves();
-
         CErc20 token0 = CErc20(lpToken.token0());
         CErc20 token1 = CErc20(lpToken.token1());
-
         if (address(token0) == _token) {
             return getMktSellAmount(
                 10 ** uint(token0.decimals()), totalAmount0, totalAmount1
@@ -321,8 +330,14 @@ contract mainCompoundLens {
     }
 
     function supplyApy(CToken market, uint priceComp,uint speed) public view returns (uint256) {
-        address token = CErc20(address(market)).underlying();
-        uint decimals = CErc20(token).decimals();
+        uint decimals = 18;
+        address token;
+        if (compareStrings(market.symbol(), "cHT")) {
+            decimals = 18;
+        }else{
+            token = CErc20(address(market)).underlying();
+            decimals = CErc20(token).decimals();
+        }
         uint dived = CErc20(address(market)).totalSupply().mul(CErc20(address(market)).exchangeRateStored()).mul(getPrice(token)).div(1e18);
         if (dived == 0) {
             return 0;
@@ -336,8 +351,14 @@ contract mainCompoundLens {
     }
 
     function borrowApy(CToken market, uint priceComp,uint speed) public view returns (uint256) {
-        address token = CErc20(address(market)).underlying();
-        uint decimals = CErc20(token).decimals();
+        uint decimals = 18;
+        address token;
+        if (compareStrings(market.symbol(), "cHT")) {
+            decimals = 18;
+        }else{
+            token = CErc20(address(market)).underlying();
+            decimals = CErc20(token).decimals();
+        }
 
         uint borrowIndex = CErc20(address(market)).borrowIndex();
         uint dived = 0;
