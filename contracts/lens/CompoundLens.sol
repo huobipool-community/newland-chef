@@ -249,9 +249,10 @@ contract mainCompoundLens {
         CTokenRewardApy[] memory res = new CTokenRewardApy[](cTokenCount);
         uint priceComp = getPrice(address(comp));
         for (uint i = 0; i < cTokenCount; i++) {
-            uint speed = getSpeed(cTokens[i],comp);
-            uint supplyApy = supplyApy(cTokens[i], priceComp, speed);
-            uint borrowApy = borrowApy(cTokens[i], priceComp, speed);
+            uint supplySpeed = getSupplySpeed(cTokens[i],comp);
+            uint borrowSpeed = getBorrowSpeed(cTokens[i],comp);
+            uint supplyApy = supplyApy(cTokens[i], priceComp, supplySpeed);
+            uint borrowApy = borrowApy(cTokens[i], priceComp, borrowSpeed);
             res[i] = CTokenRewardApy ({
                 cToken: address(cTokens[i]),
                 supplyApy: supplyApy,
@@ -299,10 +300,20 @@ contract mainCompoundLens {
         return numerator / denominator;
     }
 
-    function getSpeed(CToken market,EIP20Interface comp) internal view returns (uint256){
+    function getSupplySpeed(CToken market,EIP20Interface comp) internal view returns (uint256){
         if (compareStrings(comp.symbol(), "CAN")) {
             CanLensInterface comptroller = CanLensInterface(address(market.comptroller()));
-            return comptroller.canSpeeds(address(market))/2;
+            return comptroller.getSupplySpeed(address(market));
+        }else{
+            ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(market.comptroller()));
+            return comptroller.compSpeeds(address(market))/2;
+        }
+    }
+
+    function getBorrowSpeed(CToken market,EIP20Interface comp) internal view returns (uint256){
+        if (compareStrings(comp.symbol(), "CAN")) {
+            CanLensInterface comptroller = CanLensInterface(address(market.comptroller()));
+            return comptroller.getBorrowSpeed(address(market));
         }else{
             ComptrollerLensInterface comptroller = ComptrollerLensInterface(address(market.comptroller()));
             return comptroller.compSpeeds(address(market))/2;
